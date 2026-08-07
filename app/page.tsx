@@ -21,7 +21,22 @@ type LetterDraft = {
   savedAt?: number;
 };
 
+type SupportKind = "人" | "地点" | "小方法" | "资源";
+type SupportKitItem = { id: string; kind: SupportKind; name: string; note: string };
+type GardenKind = "sunflower" | "iris" | "berry" | "lake" | "mist" | "hill" | "light";
+type GardenMoment = { id: string; kind: GardenKind; createdAt: number };
+
 const LETTER_RECIPIENTS: LetterRecipient[] = ["老师", "家人", "朋友", "辅导员"];
+const SUPPORT_KINDS: SupportKind[] = ["人", "地点", "小方法", "资源"];
+const GARDEN_OPTIONS: Array<{ kind: GardenKind; label: string; detail: string; symbol: string }> = [
+  { kind: "sunflower", label: "一点开心", detail: "种下一朵向日葵", symbol: "✿" },
+  { kind: "iris", label: "有些难过", detail: "留下一株蓝色鸢尾", symbol: "✾" },
+  { kind: "berry", label: "我很生气", detail: "结下一颗红色浆果", symbol: "●" },
+  { kind: "lake", label: "慢慢平静", detail: "让湖面亮一点", symbol: "≈" },
+  { kind: "mist", label: "还很迷茫", detail: "留下一点雾", symbol: "☁" },
+  { kind: "hill", label: "做了件勇敢的事", detail: "长出一段山坡", symbol: "△" },
+  { kind: "light", label: "我去找人了", detail: "点亮一盏现实连接的灯", symbol: "✦" },
+];
 
 type AgentConfig = {
   apiKey: string;
@@ -141,7 +156,10 @@ export default function Home() {
   const [letterDrafts, setLetterDrafts] = useState<LetterDraft[]>([]);
   const [editingLetter, setEditingLetter] = useState<LetterDraft | null>(null);
   const [kitOpen, setKitOpen] = useState(false);
+  const [kitItems, setKitItems] = useState<SupportKitItem[]>([]);
+  const [kitDraft, setKitDraft] = useState<{ kind: SupportKind; name: string; note: string }>({ kind: "人", name: "", note: "" });
   const [gardenOpen, setGardenOpen] = useState(false);
+  const [gardenMoments, setGardenMoments] = useState<GardenMoment[]>([]);
   const [seriousMode, setSeriousMode] = useState(false);
   const [crisisResourcesOpen, setCrisisResourcesOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
@@ -174,6 +192,18 @@ export default function Home() {
       } catch {
         sessionStorage.removeItem("mori-agent-config");
       }
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedKit = localStorage.getItem("mori-support-kit");
+      if (savedKit) setKitItems(JSON.parse(savedKit) as SupportKitItem[]);
+      const savedGarden = localStorage.getItem("mori-garden-moments");
+      if (savedGarden) setGardenMoments(JSON.parse(savedGarden) as GardenMoment[]);
+    } catch {
+      localStorage.removeItem("mori-support-kit");
+      localStorage.removeItem("mori-garden-moments");
     }
   }, []);
 
@@ -383,6 +413,59 @@ export default function Home() {
     setToast("草稿已复制；是否发送仍由你决定");
   }
 
+  function saveKitItem(event: FormEvent) {
+    event.preventDefault();
+    if (!kitDraft.name.trim()) {
+      setToast("先给这份支持起个名字吧");
+      return;
+    }
+    const item: SupportKitItem = { id: `kit-${Date.now()}`, kind: kitDraft.kind, name: kitDraft.name.trim(), note: kitDraft.note.trim() };
+    setKitItems((current) => {
+      const next = [item, ...current];
+      localStorage.setItem("mori-support-kit", JSON.stringify(next));
+      return next;
+    });
+    setKitDraft({ kind: "人", name: "", note: "" });
+    setToast("已放进求助背包，什么时候使用仍由你决定");
+  }
+
+  function removeKitItem(id: string) {
+    setKitItems((current) => {
+      const next = current.filter((item) => item.id !== id);
+      localStorage.setItem("mori-support-kit", JSON.stringify(next));
+      return next;
+    });
+    setToast("已从求助背包移除");
+  }
+
+  function activateKitItem(item: SupportKitItem) {
+    setToast(item.kind === "人" ? `想联系 ${item.name} 的话，可以先从一句简单的话开始。` : `如果你愿意，现在可以试试：${item.name}`);
+  }
+
+  function addGardenMoment(kind: GardenKind) {
+    const moment: GardenMoment = { id: `garden-${Date.now()}`, kind, createdAt: Date.now() };
+    setGardenMoments((current) => {
+      const next = [moment, ...current];
+      localStorage.setItem("mori-garden-moments", JSON.stringify(next));
+      return next;
+    });
+    const option = GARDEN_OPTIONS.find((item) => item.kind === kind);
+    setToast(option ? `${option.detail}。` : "花园记录好了。");
+  }
+
+  function removeGardenMoment(id: string) {
+    setGardenMoments((current) => {
+      const next = current.filter((item) => item.id !== id);
+      localStorage.setItem("mori-garden-moments", JSON.stringify(next));
+      return next;
+    });
+    setToast("这条花园记录已删除");
+  }
+
+  const weekStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weeklyMoments = gardenMoments.filter((moment) => moment.createdAt >= weekStart);
+  const weeklyConnectionCount = weeklyMoments.filter((moment) => moment.kind === "light").length;
+
   const activeLabel = STATES.find((item) => item.id === action)?.label ?? "发呆";
   const activeMood = MOODS[moodIndex];
 
@@ -551,25 +634,28 @@ export default function Home() {
 
       {kitOpen && (
         <Drawer title="My Support Kit" subtitle="这是你选择放进来的现实支持" onClose={() => setKitOpen(false)}>
-          <div className="kit-grid">
-            <SupportCard symbol="A" name="Anna" detail="上次散步后轻松了一点" tone="mint" />
-            <SupportCard symbol="妈" name="妈妈" detail="适合先发一张小纸条" tone="peach" />
-            <SupportCard symbol="师" name="课程老师" detail="可以说明学习受到影响" tone="blue" />
-            <SupportCard symbol="校" name="学校心理中心" detail="待学校核验后配置预约入口" tone="lavender" />
-            <SupportCard symbol="♫" name="Night Walk" detail="让脑子慢下来的一首歌" tone="yellow" />
-            <SupportCard symbol="＋" name="添加支持" detail="由你决定谁进入背包" tone="plain" />
-          </div>
-          <div className="drawer-disclaimer">演示版没有配置已核验的本校联系方式，因此不会编造电话、时间或预约入口。</div>
+          <section className="kit-intro"><span>MY<br />SUPPORT<br />KIT</span><div><h3>现实中的支持，也可以先被轻轻放在这里。</h3><p>只有你主动添加的内容会出现。MORI 不会联系任何人，也不会替你做决定。</p></div></section>
+          <form className="kit-form" onSubmit={saveKitItem}>
+            <div><label>类型<select value={kitDraft.kind} onChange={(event) => setKitDraft({ ...kitDraft, kind: event.target.value as SupportKind })}>{SUPPORT_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select></label><label>名称<input value={kitDraft.name} onChange={(event) => setKitDraft({ ...kitDraft, name: event.target.value })} placeholder="例如：Anna、校园散步、呼吸练习" /></label></div>
+            <label>为什么它对你有帮助（可选）<input value={kitDraft.note} onChange={(event) => setKitDraft({ ...kitDraft, note: event.target.value })} placeholder="例如：上次聊完后轻松了一点" /></label>
+            <button type="submit">放进背包</button>
+          </form>
+          {kitItems.length === 0 ? <p className="empty-kit">背包还是空的。你可以先放进一个人、一处安全地点或一种小方法。</p> : <div className="kit-grid">{kitItems.map((item) => <article className="support-card" key={item.id}><span>{item.kind === "人" ? item.name.slice(0, 1) : item.kind === "地点" ? "⌂" : item.kind === "小方法" ? "✦" : "↗"}</span><em>{item.kind}</em><h3>{item.name}</h3><p>{item.note || "这份支持由你自己放进背包。"}</p><div><button onClick={() => activateKitItem(item)}>现在试试</button><button className="remove-item" onClick={() => removeKitItem(item.id)}>移除</button></div></article>)}</div>}
+          <div className="drawer-disclaimer">涉及学校机构的电话、开放时间或预约入口，只有在加入已核验资源后才应保存；这里不会编造这些信息。</div>
         </Drawer>
       )}
 
       {gardenOpen && (
-        <Drawer title="MORI 的心理花园" subtitle="每一种情绪都能成为一部分风景" onClose={() => setGardenOpen(false)}>
-          <div className="garden-scene">
+        <Drawer title="MORI 的心理花园" subtitle="每一种经历都能成为一部分风景" onClose={() => setGardenOpen(false)}>
+          <div className="garden-scene" aria-label="你的心理花园">
             <div className="garden-sky"><span className="garden-sun" /><i className="garden-cloud one" /><i className="garden-cloud two" /></div>
             <div className="garden-ground"><i className="flower f1" /><i className="flower f2" /><i className="flower f3" /><i className="light l1" /><i className="light l2" /><i className="light l3" /></div>
+            <div className="garden-moments" aria-hidden="true">{gardenMoments.slice(0, 18).map((moment, index) => { const option = GARDEN_OPTIONS.find((item) => item.kind === moment.kind); return <span key={moment.id} className={`garden-token ${moment.kind}`} style={{ left: `${12 + (index * 19) % 76}%`, top: `${38 + (index * 23) % 48}%` }}>{option?.symbol}</span>; })}</div>
           </div>
-          <article className="wrapped-card"><span>THIS WEEK WITH MORI</span><h3>这周不容易，但你没有用完全相同的方式走过。</h3><ul><li>周三，你第一次主动和朋友谈到考试压力。</li><li>周五，你发现散步和聊天似乎有帮助。</li><li>远处亮起了第三盏灯——代表一次真实的连接。</li></ul></article>
+          <section className="garden-picker"><h3>今天想在花园里留下什么？</h3><p>这不是打分，也不需要每天记录。只在你想留下一个片刻时添加。</p><div>{GARDEN_OPTIONS.map((option) => <button key={option.kind} onClick={() => addGardenMoment(option.kind)}><b>{option.symbol}</b><span>{option.label}<small>{option.detail}</small></span></button>)}</div></section>
+          <article className="wrapped-card"><span>THIS WEEK WITH MORI</span><h3>{weeklyMoments.length ? `这周，你在花园里留下了 ${weeklyMoments.length} 个片刻。` : "这周还没有记录，也完全没关系。"}</h3><ul>{weeklyMoments.length ? <><li>你允许自己把一些感受和经历留在这里，而不是急着把它们变成分数。</li>{weeklyConnectionCount > 0 && <li>远处亮起了 {weeklyConnectionCount} 盏灯——代表你主动选择了一次现实连接。</li>}<li>想继续时，只需要从一个很小的动作开始。</li></> : <li>当你准备好时，可以记录一次散步、一次勇敢表达，或只是此刻的感受。</li>}</ul></article>
+          {gardenMoments.length > 0 && <section className="garden-history"><div><h3>最近留下的片刻</h3><span>{gardenMoments.length} 条</span></div>{gardenMoments.slice(0, 6).map((moment) => { const option = GARDEN_OPTIONS.find((item) => item.kind === moment.kind); return <article key={moment.id}><b>{option?.symbol}</b><span>{option?.label}<small>{new Date(moment.createdAt).toLocaleDateString("zh-CN")}</small></span><button onClick={() => removeGardenMoment(moment.id)}>删除</button></article>; })}</section>}
+          <div className="drawer-disclaimer">花园记录只保存在当前设备浏览器。它描述变化与连接，不代表健康评估、情绪分数或诊断。</div>
         </Drawer>
       )}
 
@@ -618,15 +704,11 @@ export default function Home() {
 
 function Drawer({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside className="drawer">
         <div className="drawer-heading"><div><h2>{title}</h2><p>{subtitle}</p></div><button onClick={onClose} aria-label="关闭">×</button></div>
         <div className="drawer-content">{children}</div>
       </aside>
     </div>
   );
-}
-
-function SupportCard({ symbol, name, detail, tone }: { symbol: string; name: string; detail: string; tone: string }) {
-  return <article className={`support-card ${tone}`}><span>{symbol}</span><h3>{name}</h3><p>{detail}</p><button>选择</button></article>;
 }
