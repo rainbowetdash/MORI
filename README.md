@@ -13,7 +13,7 @@ npm run dev
 
 打开 `http://localhost:3000`。
 
-公开测试版部署在 `https://mori-companion.rainbowetdash.workers.dev`，并由项目根目录的 `wrangler.jsonc` 绑定到项目所有者的 Cloudflare 账户。
+公开测试版优先使用 `https://mori-companion.pages.dev`，完整页面和聊天接口均由 Cloudflare Pages 提供；`https://mori-companion.rainbowetdash.workers.dev` 保留为备用入口。
 
 不配置 API Key 时，页面使用本地演示回复。点击右上角“连接 Agent”，可填写通义千问或其他 OpenAI-compatible 模型的 API Key、模型名与服务地址。Key 只保存在当前浏览器标签页，不会写入项目文件。
 
