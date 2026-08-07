@@ -11,6 +11,18 @@ type ChatMessage = {
   kind?: "letter";
 };
 
+type LetterRecipient = "老师" | "家人" | "朋友" | "辅导员";
+type LetterDraft = {
+  id: string;
+  recipient: LetterRecipient;
+  title: string;
+  body: string;
+  source: string;
+  savedAt?: number;
+};
+
+const LETTER_RECIPIENTS: LetterRecipient[] = ["老师", "家人", "朋友", "辅导员"];
+
 type AgentConfig = {
   apiKey: string;
   appId: string;
@@ -99,6 +111,26 @@ function localDemoReply(input: string): ChatMessage {
   };
 }
 
+function buildLetter(recipient: LetterRecipient, source: string) {
+  const shared = source || "最近我有一些状态和困难，想找一个合适的人说一说。";
+  if (recipient === "老师") return {
+    title: "想和您说明一下我最近的状态",
+    body: `老师您好：\n\n我想和您说明一下我最近的状态。${shared}\n\n我现在还在慢慢整理这件事，但希望能找一个方便的时间和您聊几分钟。如果可以，也请您先听我说完，再一起看看我可以获得哪些支持。\n\n谢谢您。`,
+  };
+  if (recipient === "朋友") return {
+    title: "有件事想和你说",
+    body: `嗨，我想和你说一件最近有点难的事。${shared}\n\n我不一定需要你马上帮我解决，只是希望有人能先听我讲讲。如果你方便的话，能不能陪我聊一会儿，或者一起走走？\n\n谢谢你。`,
+  };
+  if (recipient === "辅导员") return {
+    title: "想咨询近期状态与支持渠道",
+    body: `老师您好：\n\n我想向您说明一下我最近的情况。${shared}\n\n这件事让我有些难以独自应对。我希望能了解学校里有哪些合适的支持渠道，以及是否能约一个时间进一步说明。\n\n谢谢您。`,
+  };
+  return {
+    title: "有件事想请你先听我说完",
+    body: `我有件事想认真告诉你。${shared}\n\n我不是希望你马上替我下结论或批评我。我更希望你能先听我把情况说完；如果可以，我们再一起想想下一步能找谁帮忙。\n\n谢谢你愿意听。`,
+  };
+}
+
 export default function Home() {
   const [action, setAction] = useState<PetAction>("idle");
   const [moodIndex, setMoodIndex] = useState(0);
@@ -106,6 +138,8 @@ export default function Home() {
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
+  const [letterDrafts, setLetterDrafts] = useState<LetterDraft[]>([]);
+  const [editingLetter, setEditingLetter] = useState<LetterDraft | null>(null);
   const [kitOpen, setKitOpen] = useState(false);
   const [gardenOpen, setGardenOpen] = useState(false);
   const [seriousMode, setSeriousMode] = useState(false);
@@ -140,6 +174,15 @@ export default function Home() {
       } catch {
         sessionStorage.removeItem("mori-agent-config");
       }
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedDrafts = localStorage.getItem("mori-letter-drafts");
+      if (savedDrafts) setLetterDrafts(JSON.parse(savedDrafts) as LetterDraft[]);
+    } catch {
+      localStorage.removeItem("mori-letter-drafts");
     }
   }, []);
 
@@ -292,10 +335,52 @@ export default function Home() {
     setSettingsOpen(false);
   }
 
-  function copyLetter() {
-    const letter = "我最近上学前会感到明显紧张和抗拒，睡眠和上课也受到了一些影响。我希望你能先听我把情况说完，不要马上批评我，并陪我一起找合适的支持。";
-    navigator.clipboard?.writeText(letter);
-    setToast("小纸条已复制，是否发送仍由你决定");
+  function latestLetterSource() {
+    const recentUserMessages = messages.filter((message) => message.role === "user").slice(-3).map((message) => message.text.trim()).filter(Boolean);
+    return recentUserMessages.join("；") || "最近我有一些状态和困难，想找一个合适的人说一说。";
+  }
+
+  function openLetterEditor(recipient: LetterRecipient = "家人") {
+    const source = latestLetterSource();
+    const letter = buildLetter(recipient, source);
+    setEditingLetter({ id: `letter-${Date.now()}`, recipient, source, ...letter });
+    setMailOpen(true);
+  }
+
+  function changeLetterRecipient(recipient: LetterRecipient) {
+    setEditingLetter((current) => current ? { ...current, recipient, ...buildLetter(recipient, current.source) } : current);
+  }
+
+  function saveLetterDraft() {
+    if (!editingLetter) return;
+    const saved = { ...editingLetter, title: editingLetter.title.trim() || "一封还没命名的信", body: editingLetter.body.trim(), savedAt: Date.now() };
+    if (!saved.body) {
+      setToast("先写一点想说的话，再保存吧");
+      return;
+    }
+    setLetterDrafts((current) => {
+      const next = [saved, ...current.filter((draft) => draft.id !== saved.id)];
+      localStorage.setItem("mori-letter-drafts", JSON.stringify(next));
+      return next;
+    });
+    setEditingLetter(saved);
+    setToast("草稿已保存在这台设备的浏览器里");
+  }
+
+  function deleteLetterDraft(id: string) {
+    setLetterDrafts((current) => {
+      const next = current.filter((draft) => draft.id !== id);
+      localStorage.setItem("mori-letter-drafts", JSON.stringify(next));
+      return next;
+    });
+    if (editingLetter?.id === id) setEditingLetter(null);
+    setToast("草稿已删除");
+  }
+
+  function copyLetter(letter = editingLetter) {
+    if (!letter?.body) return;
+    void navigator.clipboard?.writeText(`${letter.title}\n\n${letter.body}`);
+    setToast("草稿已复制；是否发送仍由你决定");
   }
 
   const activeLabel = STATES.find((item) => item.id === action)?.label ?? "发呆";
@@ -310,7 +395,7 @@ export default function Home() {
         </button>
         <div className="status-pill"><span className="status-dot" />公开测试 · 非实时人工值守</div>
         <nav className="top-actions" aria-label="MORI 工具">
-          <button onClick={() => setMailOpen(true)}>信箱 <span>2</span></button>
+          <button onClick={() => setMailOpen(true)}>信箱 <span>{letterDrafts.length}</span></button>
           <button onClick={() => setKitOpen(true)}>求助背包</button>
           <button onClick={() => setGardenOpen(true)}>心理花园</button>
           <button className={config.apiKey && config.appId ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
@@ -405,7 +490,7 @@ export default function Home() {
                     <div><dt>影响了什么</dt><dd>睡眠和正常上课已经受到影响。</dd></div>
                     <div><dt>我需要什么</dt><dd>希望你先听完，并陪我寻找合适的支持。</dd></div>
                   </dl>
-                  <div className="letter-actions"><button onClick={copyLetter}>复制</button><button onClick={() => setMailOpen(true)}>放进信箱</button><button className="quiet">暂不发送</button></div>
+                  <div className="letter-actions"><button onClick={() => openLetterEditor("家人")}>整理成草稿</button><button onClick={() => openLetterEditor("老师")}>给老师改写</button><button className="quiet" onClick={() => setToast("没关系，决定权一直在你手上")}>暂不发送</button></div>
                 </article>
               )}
             </div>
@@ -440,9 +525,27 @@ export default function Home() {
 
       {mailOpen && (
         <Drawer title="MORI 的信箱" subtitle="AI 帮你表达，发送权永远属于你" onClose={() => setMailOpen(false)}>
-          <div className="mail-intro"><span>2</span><p>封写给现实世界的信<br /><small>没有任何一封会被自动发送</small></p></div>
-          <article className="mail-item new"><div><span>给老师</span><time>今天</time></div><h3>关于我最近的状态</h3><p>我最近有些难以保持正常上课，希望找一个时间向您说明情况……</p><button onClick={copyLetter}>打开并编辑</button></article>
-          <article className="mail-item"><div><span>给妈妈</span><time>周二</time></div><h3>有件事想让你先听完</h3><p>我不是不想努力，只是最近睡眠和情绪已经影响到了日常生活……</p><button onClick={copyLetter}>打开并编辑</button></article>
+          <div className="mail-intro"><span>{letterDrafts.length}</span><p>封保存在这台设备的草稿<br /><small>没有任何一封会被自动发送</small></p></div>
+          <section className="letter-starter" aria-label="从聊天生成草稿">
+            <span>HELP ME SAY IT</span><h3>把当前对话整理成一封信</h3><p>选择对象后，MORI 会用不同的表达方式起草；你可以继续编辑，也可以不保存。</p>
+            <div className="recipient-picker">{LETTER_RECIPIENTS.map((recipient) => <button key={recipient} onClick={() => openLetterEditor(recipient)}>给{recipient}</button>)}</div>
+          </section>
+          {editingLetter && (
+            <section className="letter-editor" aria-label="编辑信件草稿">
+              <div className="letter-editor-heading"><div><span>正在编辑</span><h3>这封信由你决定</h3></div><button onClick={() => setEditingLetter(null)}>收起</button></div>
+              <label>收信对象<select value={editingLetter.recipient} onChange={(event) => changeLetterRecipient(event.target.value as LetterRecipient)}>{LETTER_RECIPIENTS.map((recipient) => <option key={recipient} value={recipient}>{recipient}</option>)}</select></label>
+              <label>标题<input value={editingLetter.title} onChange={(event) => setEditingLetter({ ...editingLetter, title: event.target.value })} /></label>
+              <label>内容<textarea value={editingLetter.body} onChange={(event) => setEditingLetter({ ...editingLetter, body: event.target.value })} rows={10} /></label>
+              <div className="letter-editor-actions"><button onClick={saveLetterDraft}>保存草稿</button><button className="secondary" onClick={() => copyLetter()}>复制</button><span>不会自动发送</span></div>
+            </section>
+          )}
+          <section className="saved-letters" aria-label="已保存草稿">
+            <div className="saved-letters-heading"><h3>已保存</h3><span>{letterDrafts.length} 封</span></div>
+            {letterDrafts.length === 0 ? <p className="empty-letters">还没有保存的草稿。你可以从当前聊天开始整理。</p> : letterDrafts.map((draft) => (
+              <article className="mail-item" key={draft.id}><div><span>给{draft.recipient}</span><time>{draft.savedAt ? new Date(draft.savedAt).toLocaleDateString("zh-CN") : "未保存"}</time></div><h3>{draft.title}</h3><p>{draft.body.slice(0, 64)}{draft.body.length > 64 ? "……" : ""}</p><div className="mail-item-actions"><button onClick={() => setEditingLetter(draft)}>打开并编辑</button><button onClick={() => copyLetter(draft)}>复制</button><button className="delete-draft" onClick={() => deleteLetterDraft(draft.id)}>删除</button></div></article>
+            ))}
+          </section>
+          <div className="drawer-disclaimer">草稿只在你点击“保存草稿”后保存在当前设备的浏览器中；你可以随时复制或删除，MORI 不会代你发送。</div>
         </Drawer>
       )}
 

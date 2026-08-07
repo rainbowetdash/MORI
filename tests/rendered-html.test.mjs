@@ -42,6 +42,10 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /stageRef/);
   assert.match(page, /dockClearance/);
   assert.match(page, /点我换表情/);
+  assert.match(page, /buildLetter/);
+  assert.match(page, /mori-letter-drafts/);
+  assert.match(page, /保存草稿/);
+  assert.match(page, /不会自动发送/);
   assert.match(page, /国家卫生健康委/);
   assert.match(page, /worldhealth|who\.int/i);
   assert.match(route, /\/api\/v1\/apps/);
