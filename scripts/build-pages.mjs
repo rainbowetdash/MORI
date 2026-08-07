@@ -2,7 +2,6 @@ import { cp, rm } from "node:fs/promises";
 import { build } from "esbuild";
 
 const clientDir = new URL("../dist/client/", import.meta.url);
-const serverDir = new URL("../dist/server/", import.meta.url);
 const pagesDir = new URL("../dist/pages/", import.meta.url);
 
 await rm(pagesDir, { force: true, recursive: true });
@@ -13,7 +12,7 @@ await cp(clientDir, pagesDir, { recursive: true });
 await build({
   bundle: true,
   conditions: ["workerd", "worker", "browser"],
-  entryPoints: [new URL("index.js", serverDir).pathname],
+  entryPoints: [new URL("pages-worker-entry.mjs", import.meta.url).pathname],
   external: ["node:*"],
   format: "esm",
   minify: true,
