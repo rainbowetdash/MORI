@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://mori-companion.rainbowetdash.chatgpt.site"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://mori-companion.rainbowetdash.workers.dev"),
   title: "MORI — 现实连接型心理支持桌宠",
   description: "一只帮助用户表达、行动并重新连接现实支持的桌面伙伴。",
   openGraph: {
