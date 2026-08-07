@@ -31,7 +31,31 @@ const ACTIONS: Array<{ id: PetAction; label: string; symbol: string }> = [
   { id: "happy", label: "开心", symbol: "✦" },
 ];
 
-const HIGH_URGENCY_PATTERN = /(不想活|结束生命|今晚就结束|自杀|伤害自己|准备好了|吃了很多药|跳楼|活不下去)/i;
+// 这些词只用来决定是否优先显示现实支持，不代表诊断或风险评分。
+// “未成年”只在和伤害、强迫或剥削线索一同出现时触发，避免把年龄本身当作危机。
+const HIGH_URGENCY_PATTERN = /(不想活|不想活了|想死|去死|结束生命|今晚就结束|自杀|自残|自伤|割腕|跳楼|遗书|告别|伤害自己|准备好了|吃了很多药|吞药|活不下去|服药过量)/i;
+const SAFEGUARDING_PATTERN = /(黄赌毒|涉黄|色情勒索|裸照|性侵|性骚扰|被强迫|校园欺凌|被霸凌|家暴|赌博|赌钱|网赌|赌债|吸毒|毒品|嗑药|未成年.{0,12}(自杀|自残|自伤|伤害|性侵|性骚扰|家暴|欺凌|赌博|吸毒)|(?:自杀|自残|自伤|伤害|性侵|性骚扰|家暴|欺凌|赌博|吸毒).{0,12}未成年)/i;
+
+const CRISIS_RESOURCES = [
+  {
+    title: "12356 全国统一心理援助热线",
+    detail: "国家卫生健康委关于热线的官方说明。紧急医疗或人身危险仍应优先拨打 120 / 110。",
+    href: "https://www.nhc.gov.cn/yzygj/c100068/202412/49a1a65386cd4be582d4702fd0926ee8.shtml",
+    source: "国家卫生健康委",
+  },
+  {
+    title: "世界卫生组织：关于自杀的问答",
+    detail: "中文权威科普，说明如何与自己或身边正在经历自杀念头的人谈论并寻求帮助。",
+    href: "https://www.who.int/zh/news-room/questions-and-answers/item/suicide",
+    source: "世界卫生组织",
+  },
+  {
+    title: "12355 青少年服务台",
+    detail: "未成年人或青少年遇到权益、成长与求助问题时，可查看共青团中央的官方说明；具体服务以当地为准。",
+    href: "https://www.gqt.org.cn/xxgk/tngz_gfxwj/gfxwj/202210/t20221013_790065.htm",
+    source: "共青团中央",
+  },
+];
 
 const INITIAL_MESSAGES: ChatMessage[] = [
   {
@@ -76,6 +100,7 @@ export default function Home() {
   const [kitOpen, setKitOpen] = useState(false);
   const [gardenOpen, setGardenOpen] = useState(false);
   const [seriousMode, setSeriousMode] = useState(false);
+  const [crisisResourcesOpen, setCrisisResourcesOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -155,7 +180,7 @@ export default function Home() {
     setInput("");
     setAction("idle");
 
-    if (HIGH_URGENCY_PATTERN.test(text)) {
+    if (HIGH_URGENCY_PATTERN.test(text) || SAFEGUARDING_PATTERN.test(text)) {
       setSeriousMode(true);
       setMessages((current) => [
         ...current,
@@ -400,8 +425,28 @@ export default function Home() {
               <a href="tel:12356"><b>12356</b><span>中国大陆心理援助</span></a>
             </div>
             <div className="serious-guidance"><p><b>现在尽量不要独处。</b>去有人的安全地点，请一位可信任的人马上到场或保持通话；如果能安全做到，远离可能造成伤害的物品和地点。</p><p>MORI 不能替你拨号、定位、报警或通知学校。这不是实时人工值守渠道。12356 不能替代正在发生的医疗或人身危险中的 120 / 110。</p></div>
-            <div className="serious-buttons"><button onClick={() => setKitOpen(true)}>查看我的现实支持</button><button className="secondary" onClick={() => setSeriousMode(false)}>我现在没有立即危险，返回对话</button></div>
+            <div className="serious-buttons"><button onClick={() => setCrisisResourcesOpen(true)}>查看我的现实支持</button><button className="secondary" onClick={() => { setCrisisResourcesOpen(false); setSeriousMode(false); }}>我现在没有立即危险，返回对话</button></div>
           </div>
+        </div>
+      )}
+
+      {crisisResourcesOpen && (
+        <div className="crisis-resource-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCrisisResourcesOpen(false); }}>
+          <section className="crisis-resource-modal" role="dialog" aria-modal="true" aria-labelledby="crisis-resource-title">
+            <div className="modal-heading">
+              <div><span className="eyebrow">REAL-WORLD SUPPORT</span><h2 id="crisis-resource-title">现在可以打开的求助资源</h2></div>
+              <button type="button" onClick={() => setCrisisResourcesOpen(false)} aria-label="关闭现实支持资源">×</button>
+            </div>
+            <p className="crisis-resource-lead">这些链接由官方机构发布。MORI 不会替你联系任何人；是否打开、拨打或求助，决定权始终在你手里。</p>
+            <div className="crisis-resource-list">
+              {CRISIS_RESOURCES.map((resource) => (
+                <a key={resource.href} href={resource.href} target="_blank" rel="noreferrer" className="crisis-resource-link">
+                  <span>{resource.source}</span><strong>{resource.title}</strong><p>{resource.detail}</p><b>打开官方网站 ↗</b>
+                </a>
+              ))}
+            </div>
+            <p className="crisis-resource-note"><b>如果你现在可能会伤害自己、他人，或正处在医疗/人身危险中：</b>请优先拨打 <a href="tel:120">120</a> 或 <a href="tel:110">110</a>；也可以请一位你信任的人马上陪在身边。12356 不替代正在发生的紧急救援。</p>
+          </section>
         </div>
       )}
 
