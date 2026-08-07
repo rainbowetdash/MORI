@@ -37,6 +37,9 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /12356/);
   assert.match(page, /黄赌毒/);
   assert.match(page, /未成年/);
+  assert.match(page, /MOODS/);
+  assert.match(page, /isDragging/);
+  assert.match(page, /点我换表情/);
   assert.match(page, /国家卫生健康委/);
   assert.match(page, /worldhealth|who\.int/i);
   assert.match(route, /不是心理咨询师/);

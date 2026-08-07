@@ -2,7 +2,8 @@
 
 import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
-type PetAction = "idle" | "walk" | "sleep" | "read" | "stretch" | "happy";
+type PetAction = "idle" | "walk" | "sleep" | "read" | "stretch";
+type PetMood = "calm" | "happy" | "curious" | "worried";
 type ChatMessage = {
   id: number;
   role: "user" | "assistant";
@@ -22,13 +23,19 @@ const DEFAULT_CONFIG: AgentConfig = {
   model: "qwen-plus",
 };
 
-const ACTIONS: Array<{ id: PetAction; label: string; symbol: string }> = [
+const STATES: Array<{ id: PetAction; label: string; symbol: string }> = [
   { id: "idle", label: "发呆", symbol: "···" },
   { id: "walk", label: "散步", symbol: "↝" },
   { id: "read", label: "看书", symbol: "▤" },
   { id: "sleep", label: "睡觉", symbol: "☾" },
   { id: "stretch", label: "伸懒腰", symbol: "↟" },
-  { id: "happy", label: "开心", symbol: "✦" },
+];
+
+const MOODS: Array<{ id: PetMood; label: string }> = [
+  { id: "calm", label: "平静" },
+  { id: "happy", label: "开心" },
+  { id: "curious", label: "好奇" },
+  { id: "worried", label: "担心" },
 ];
 
 // 这些词只用来决定是否优先显示现实支持，不代表诊断或风险评分。
@@ -94,6 +101,8 @@ function localDemoReply(input: string): ChatMessage {
 
 export default function Home() {
   const [action, setAction] = useState<PetAction>("idle");
+  const [moodIndex, setMoodIndex] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
@@ -109,7 +118,8 @@ export default function Home() {
   const [petPosition, setPetPosition] = useState({ x: 0, y: 0 });
   const [leafCount, setLeafCount] = useState(7);
   const [toast, setToast] = useState("");
-  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const suppressMoodChangeRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -143,6 +153,17 @@ export default function Home() {
     }
   }
 
+  function cycleMood() {
+    if (suppressMoodChangeRef.current) {
+      suppressMoodChangeRef.current = false;
+      return;
+    }
+    const nextMoodIndex = (moodIndex + 1) % MOODS.length;
+    setMoodIndex(nextMoodIndex);
+    if (action === "sleep") setAction("idle");
+    setToast(`MORI 变成了${MOODS[nextMoodIndex].label}的表情`);
+  }
+
   function startDragging(event: ReactPointerEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest("button")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -151,13 +172,16 @@ export default function Home() {
       startY: event.clientY,
       originX: petPosition.x,
       originY: petPosition.y,
+      moved: false,
     };
+    setIsDragging(true);
   }
 
   function dragPet(event: ReactPointerEvent<HTMLDivElement>) {
     if (!dragRef.current) return;
     const nextX = dragRef.current.originX + event.clientX - dragRef.current.startX;
     const nextY = dragRef.current.originY + event.clientY - dragRef.current.startY;
+    if (Math.abs(event.clientX - dragRef.current.startX) > 4 || Math.abs(event.clientY - dragRef.current.startY) > 4) dragRef.current.moved = true;
     setPetPosition({
       x: Math.max(-260, Math.min(260, nextX)),
       y: Math.max(-110, Math.min(80, nextY)),
@@ -165,8 +189,12 @@ export default function Home() {
   }
 
   function stopDragging(event: ReactPointerEvent<HTMLDivElement>) {
-    if (dragRef.current) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (dragRef.current) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      suppressMoodChangeRef.current = dragRef.current.moved;
+    }
     dragRef.current = null;
+    setIsDragging(false);
   }
 
   async function sendMessage(event?: FormEvent) {
@@ -250,12 +278,13 @@ export default function Home() {
     setToast("小纸条已复制，是否发送仍由你决定");
   }
 
-  const activeLabel = ACTIONS.find((item) => item.id === action)?.label ?? "发呆";
+  const activeLabel = STATES.find((item) => item.id === action)?.label ?? "发呆";
+  const activeMood = MOODS[moodIndex];
 
   return (
     <main className={`app-shell ${chatOpen ? "chat-is-open" : ""}`}>
       <header className="topbar">
-        <button className="brand" onClick={() => selectAction("happy")} aria-label="让 MORI 开心">
+        <button className="brand" onClick={cycleMood} aria-label="切换 MORI 的表情">
           <span className="brand-mark">M</span>
           <span><strong>MORI</strong><small>real-world connection companion</small></span>
         </button>
@@ -286,14 +315,22 @@ export default function Home() {
         <div className="backpack-object" aria-hidden="true"><span>MY<br />SUPPORT<br />KIT</span></div>
 
         <div
-          className={`pet-wrap action-${action}`}
+          className={`pet-wrap action-${action} mood-${activeMood.id} ${isDragging ? "is-dragging" : ""}`}
           style={{ transform: `translate(${petPosition.x}px, ${petPosition.y}px)` }}
           onPointerDown={startDragging}
           onPointerMove={dragPet}
           onPointerUp={stopDragging}
           onPointerCancel={stopDragging}
-          role="img"
-          aria-label={`MORI 正在${activeLabel}，可以拖动它`}
+          onClick={cycleMood}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              cycleMood();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={isDragging ? "MORI 正在被拖动" : `MORI 正在${activeLabel}，表情${activeMood.label}，点击可切换表情，也可以拖动它`}
         >
           <div className="pet-shadow" />
           <div className="pet">
@@ -308,16 +345,17 @@ export default function Home() {
             {action === "read" && <span className="pet-book">little<br />things</span>}
             {action === "sleep" && <span className="sleep-symbols">z<br /><b>z</b></span>}
           </div>
-          <div className="pet-name"><strong>MORI</strong><span>{activeLabel}中 · 拖动我试试</span></div>
+          <div className="pet-name"><strong>MORI</strong><span>{isDragging ? "被抱起来啦 · 松手会回到原状态" : `${activeLabel}中 · 点我换表情`}</span></div>
         </div>
 
         <div className="thought-bubble">
-          <p>{action === "sleep" ? "今天先到这里也可以。" : action === "walk" ? "陪我走五分钟？路不用很远。" : action === "read" ? "有些话，写下来会轻一点。" : action === "stretch" ? "我坐得都要长苔藓了……" : action === "happy" ? "看见你回来，我的叶子都亮了。" : "你今天回来的时候，好像和平时不太一样。"}</p>
+          <p>{action === "sleep" ? "今天先到这里也可以。" : action === "walk" ? "陪我走五分钟？路不用很远。" : action === "read" ? "有些话，写下来会轻一点。" : action === "stretch" ? "我坐得都要长苔藓了……" : activeMood.id === "happy" ? "看见你回来，我的叶子都亮了。" : activeMood.id === "worried" ? "你今天回来得有点慢，我有一点点担心。" : "你今天回来的时候，好像和平时不太一样。"}</p>
           <button onClick={() => setChatOpen(true)}>把今天发生的事丢给我</button>
         </div>
 
-        <div className="action-dock" aria-label="选择 MORI 的动作">
-          {ACTIONS.map((item) => (
+        <div className="action-dock" aria-label="选择 MORI 的状态">
+          <span className="dock-label">状态</span>
+          {STATES.map((item) => (
             <button key={item.id} className={action === item.id ? "active" : ""} onClick={() => selectAction(item.id)}>
               <span>{item.symbol}</span>{item.label}
             </button>
