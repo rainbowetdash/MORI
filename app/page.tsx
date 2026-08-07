@@ -234,7 +234,7 @@ export default function Home() {
           <span className="brand-mark">M</span>
           <span><strong>MORI</strong><small>real-world connection companion</small></span>
         </button>
-        <div className="status-pill"><span className="status-dot" />本地演示 · 非实时人工值守</div>
+        <div className="status-pill"><span className="status-dot" />公开测试 · 非实时人工值守</div>
         <nav className="top-actions" aria-label="MORI 工具">
           <button onClick={() => setMailOpen(true)}>信箱 <span>2</span></button>
           <button onClick={() => setKitOpen(true)}>求助背包</button>
@@ -349,7 +349,7 @@ export default function Home() {
               <label>模型<input value={draftConfig.model} onChange={(event) => setDraftConfig({ ...draftConfig, model: event.target.value })} placeholder="qwen-plus" /></label>
               <label>服务地址<input value={draftConfig.baseUrl} onChange={(event) => setDraftConfig({ ...draftConfig, baseUrl: event.target.value })} /></label>
             </div>
-            <div className="privacy-box"><b>本地演示说明</b><p>Key 仅保存在当前浏览器标签页。发送消息时会经本地代理转发到所选模型服务，不写入项目文件。正式上线 Cloudflare 时，应改用 Worker Secret 并补充机构隐私政策。</p></div>
+            <div className="privacy-box"><b>公开测试说明</b><p>Key 仅保存在当前浏览器标签页。发送消息时会经服务端代理转发到所选模型服务，不写入项目文件。正式提供真实 Agent 时，应改用 Cloudflare Secret 并补充机构隐私政策。</p></div>
             <div className="modal-actions"><button type="button" className="secondary" onClick={() => { setDraftConfig(DEFAULT_CONFIG); setConfig(DEFAULT_CONFIG); sessionStorage.removeItem("mori-agent-config"); setSettingsOpen(false); }}>使用演示模式</button><button type="submit">保存并连接</button></div>
           </form>
         </div>
