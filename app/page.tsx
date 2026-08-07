@@ -121,6 +121,7 @@ export default function Home() {
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const suppressMoodChangeRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("mori-agent-config");
@@ -182,9 +183,19 @@ export default function Home() {
     const nextX = dragRef.current.originX + event.clientX - dragRef.current.startX;
     const nextY = dragRef.current.originY + event.clientY - dragRef.current.startY;
     if (Math.abs(event.clientX - dragRef.current.startX) > 4 || Math.abs(event.clientY - dragRef.current.startY) > 4) dragRef.current.moved = true;
+
+    const stage = stageRef.current;
+    const pet = event.currentTarget;
+    const horizontalPadding = 22;
+    const topPadding = 28;
+    const dockClearance = 82;
+    const minX = stage ? horizontalPadding - pet.offsetLeft : -620;
+    const maxX = stage ? stage.clientWidth - pet.offsetLeft - pet.offsetWidth - horizontalPadding : 620;
+    const minY = stage ? topPadding - pet.offsetTop : -280;
+    const maxY = stage ? stage.clientHeight - pet.offsetTop - pet.offsetHeight - dockClearance : 40;
     setPetPosition({
-      x: Math.max(-260, Math.min(260, nextX)),
-      y: Math.max(-110, Math.min(80, nextY)),
+      x: Math.max(minX, Math.min(maxX, nextX)),
+      y: Math.max(minY, Math.min(maxY, nextY)),
     });
   }
 
@@ -299,7 +310,7 @@ export default function Home() {
         </nav>
       </header>
 
-      <section className="desktop-stage" aria-label="MORI 的桌面房间">
+      <section ref={stageRef} className="desktop-stage" aria-label="MORI 的桌面房间">
         <div className="sky-window" aria-hidden="true">
           <span className="cloud cloud-one" /><span className="cloud cloud-two" />
           <div className="window-hill hill-one" /><div className="window-hill hill-two" />
