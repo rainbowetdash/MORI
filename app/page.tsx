@@ -13,14 +13,14 @@ type ChatMessage = {
 
 type AgentConfig = {
   apiKey: string;
+  appId: string;
   baseUrl: string;
-  model: string;
 };
 
 const DEFAULT_CONFIG: AgentConfig = {
   apiKey: "",
-  baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  model: "qwen-plus",
+  appId: "",
+  baseUrl: "https://dashscope.aliyuncs.com",
 };
 
 const STATES: Array<{ id: PetAction; label: string; symbol: string }> = [
@@ -113,6 +113,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [agentSessionId, setAgentSessionId] = useState("");
   const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [draftConfig, setDraftConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [petPosition, setPetPosition] = useState({ x: 0, y: 0 });
@@ -128,8 +129,14 @@ export default function Home() {
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as AgentConfig;
-        setConfig(parsed);
-        setDraftConfig(parsed);
+        const migrated = {
+          ...DEFAULT_CONFIG,
+          ...parsed,
+          appId: parsed.appId ?? "",
+          baseUrl: parsed.baseUrl?.includes("compatible-mode") ? DEFAULT_CONFIG.baseUrl : parsed.baseUrl || DEFAULT_CONFIG.baseUrl,
+        };
+        setConfig(migrated);
+        setDraftConfig(migrated);
       } catch {
         sessionStorage.removeItem("mori-agent-config");
       }
@@ -232,7 +239,7 @@ export default function Home() {
       return;
     }
 
-    if (!config.apiKey) {
+    if (!config.apiKey || !config.appId) {
       window.setTimeout(() => {
         setMessages((current) => [...current, localDemoReply(text)]);
         if (/(不知道怎么说|爸妈|妈妈|爸爸|老师|咨询师|辅导员)/.test(text)) setAction("read");
@@ -247,11 +254,13 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...config,
+          sessionId: agentSessionId,
           messages: nextMessages.map(({ role, text: content }) => ({ role, content })),
         }),
       });
-      const payload = (await response.json()) as { reply?: string; error?: string };
+      const payload = (await response.json()) as { reply?: string; sessionId?: string; error?: string };
       if (!response.ok || !payload.reply) throw new Error(payload.error || "Agent 暂时没有回应");
+      if (payload.sessionId) setAgentSessionId(payload.sessionId);
       setMessages((current) => [
         ...current,
         { id: Date.now() + 1, role: "assistant", text: payload.reply ?? "" },
@@ -272,14 +281,14 @@ export default function Home() {
 
   function saveAgentConfig(event: FormEvent) {
     event.preventDefault();
-    setConfig(draftConfig);
-    if (draftConfig.apiKey) {
-      sessionStorage.setItem("mori-agent-config", JSON.stringify(draftConfig));
-      setToast("Agent 已连接 · Key 仅保留在当前标签页");
-    } else {
-      sessionStorage.removeItem("mori-agent-config");
-      setToast("已切换为本地演示模式");
+    if (!draftConfig.apiKey || !draftConfig.appId.trim()) {
+      setToast("请填写 API Key 和 Agent 应用 ID");
+      return;
     }
+    setConfig(draftConfig);
+    setAgentSessionId("");
+    sessionStorage.setItem("mori-agent-config", JSON.stringify(draftConfig));
+    setToast("百炼 Agent 已连接 · Key 仅保留在当前标签页");
     setSettingsOpen(false);
   }
 
@@ -304,8 +313,8 @@ export default function Home() {
           <button onClick={() => setMailOpen(true)}>信箱 <span>2</span></button>
           <button onClick={() => setKitOpen(true)}>求助背包</button>
           <button onClick={() => setGardenOpen(true)}>心理花园</button>
-          <button className={config.apiKey ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
-            {config.apiKey ? "Agent 已连接" : "连接 Agent"}
+          <button className={config.apiKey && config.appId ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
+            {config.apiKey && config.appId ? "Agent 已连接" : "连接 Agent"}
           </button>
         </nav>
       </header>
@@ -379,7 +388,7 @@ export default function Home() {
 
       <aside className={`chat-panel ${chatOpen ? "open" : ""}`} aria-hidden={!chatOpen}>
         <div className="chat-header">
-          <div><span className="mini-mori">M</span><p><strong>MORI</strong><small>{config.apiKey ? `${config.model} · 已连接` : "安全演示模式"}</small></p></div>
+          <div><span className="mini-mori">M</span><p><strong>MORI</strong><small>{config.apiKey && config.appId ? "百炼 Agent · 已连接" : "安全演示模式"}</small></p></div>
           <button onClick={() => setChatOpen(false)} aria-label="关闭对话">×</button>
         </div>
         <div className="boundary-note">心理支持与资源导航，不提供诊断或治疗。紧急情况请联系现实中的人和当地急救。</div>
@@ -418,12 +427,12 @@ export default function Home() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
           <form className="modal-card settings-card" onSubmit={saveAgentConfig}>
             <div className="modal-heading"><div><span className="eyebrow">AGENT SETTINGS</span><h2>连接你们的心理支持 Agent</h2></div><button type="button" onClick={() => setSettingsOpen(false)}>×</button></div>
-            <label>API Key<input type="password" value={draftConfig.apiKey} onChange={(event) => setDraftConfig({ ...draftConfig, apiKey: event.target.value })} placeholder="sk-…" autoComplete="off" /></label>
+            <label>API Key<input required type="password" value={draftConfig.apiKey} onChange={(event) => setDraftConfig({ ...draftConfig, apiKey: event.target.value })} placeholder="sk-…" autoComplete="off" /></label>
             <div className="field-grid">
-              <label>模型<input value={draftConfig.model} onChange={(event) => setDraftConfig({ ...draftConfig, model: event.target.value })} placeholder="qwen-plus" /></label>
-              <label>服务地址<input value={draftConfig.baseUrl} onChange={(event) => setDraftConfig({ ...draftConfig, baseUrl: event.target.value })} /></label>
+              <label>Agent 应用 ID<input required value={draftConfig.appId} onChange={(event) => setDraftConfig({ ...draftConfig, appId: event.target.value })} placeholder="在百炼应用详情中复制" /></label>
+              <label>百炼服务地址<input required value={draftConfig.baseUrl} onChange={(event) => setDraftConfig({ ...draftConfig, baseUrl: event.target.value })} /></label>
             </div>
-            <div className="privacy-box"><b>公开测试说明</b><p>Key 仅保存在当前浏览器标签页。发送消息时会经服务端代理转发到所选模型服务，不写入项目文件。正式提供真实 Agent 时，应改用 Cloudflare Secret 并补充机构隐私政策。</p></div>
+            <div className="privacy-box"><b>百炼应用连接</b><p>填写已发布 Agent 的应用 ID 后，MORI 会调用该应用本身，因此使用其已配置的提示词、知识库和能力。Key 仅保存在当前浏览器标签页，不写入项目文件。</p></div>
             <div className="modal-actions"><button type="button" className="secondary" onClick={() => { setDraftConfig(DEFAULT_CONFIG); setConfig(DEFAULT_CONFIG); sessionStorage.removeItem("mori-agent-config"); setSettingsOpen(false); }}>使用演示模式</button><button type="submit">保存并连接</button></div>
           </form>
         </div>

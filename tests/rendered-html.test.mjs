@@ -44,8 +44,8 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /点我换表情/);
   assert.match(page, /国家卫生健康委/);
   assert.match(page, /worldhealth|who\.int/i);
-  assert.match(route, /不是心理咨询师/);
-  assert.match(route, /绝不声称已经发送/);
-  assert.match(route, /没有经过学校核验的资源/);
-  assert.match(route, /校园欺凌/);
+  assert.match(route, /\/api\/v1\/apps/);
+  assert.match(route, /appId/);
+  assert.match(route, /session_id/);
+  assert.match(route, /payload\.output\?\.text/);
 });
