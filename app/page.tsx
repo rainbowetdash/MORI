@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
 type PetAction = "idle" | "walk" | "sleep" | "read" | "stretch";
 type PetMood = "calm" | "happy" | "curious" | "worried";
@@ -21,13 +21,20 @@ type LetterDraft = {
   savedAt?: number;
 };
 
-type SupportKind = "人" | "地点" | "小方法" | "资源";
-type SupportKitItem = { id: string; kind: SupportKind; name: string; note: string };
 type GardenKind = "sunflower" | "iris" | "berry" | "lake" | "mist" | "hill" | "light";
 type GardenMoment = { id: string; kind: GardenKind; createdAt: number };
+type JournalPaper = "peach" | "sky" | "lilac" | "sunshine";
+type JournalEntry = { id: string; title: string; body: string; stickers: string[]; photos: string[]; paper: JournalPaper; createdAt: number; updatedAt: number };
 
 const LETTER_RECIPIENTS: LetterRecipient[] = ["家人", "朋友", "伴侣", "专业人士"];
-const SUPPORT_KINDS: SupportKind[] = ["人", "地点", "小方法", "资源"];
+const JOURNAL_STICKERS = [
+  { symbol: "✿", label: "小花" }, { symbol: "☁", label: "云朵" }, { symbol: "☾", label: "月亮" },
+  { symbol: "✦", label: "星光" }, { symbol: "♥", label: "心事" }, { symbol: "🍓", label: "草莓" },
+  { symbol: "🫖", label: "茶点" }, { symbol: "🎧", label: "音乐" }, { symbol: "🪴", label: "新芽" },
+];
+const JOURNAL_PAPERS: Array<{ id: JournalPaper; label: string }> = [
+  { id: "peach", label: "蜜桃纸" }, { id: "sky", label: "晴空纸" }, { id: "lilac", label: "鸢尾纸" }, { id: "sunshine", label: "阳光纸" },
+];
 const GARDEN_OPTIONS: Array<{ kind: GardenKind; label: string; detail: string; symbol: string }> = [
   { kind: "sunflower", label: "一点开心", detail: "种下一朵向日葵", symbol: "✿" },
   { kind: "iris", label: "有些难过", detail: "留下一株蓝色鸢尾", symbol: "✾" },
@@ -111,6 +118,11 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   },
 ];
 
+function newJournalEntry(): JournalEntry {
+  const now = Date.now();
+  return { id: `journal-${now}`, title: "", body: "", stickers: ["✿"], photos: [], paper: "peach", createdAt: now, updatedAt: now };
+}
+
 function localDemoReply(input: string): ChatMessage {
   const normalized = input.toLowerCase();
 
@@ -167,9 +179,9 @@ export default function Home() {
   const [mailOpen, setMailOpen] = useState(false);
   const [letterDrafts, setLetterDrafts] = useState<LetterDraft[]>([]);
   const [editingLetter, setEditingLetter] = useState<LetterDraft | null>(null);
-  const [kitOpen, setKitOpen] = useState(false);
-  const [kitItems, setKitItems] = useState<SupportKitItem[]>([]);
-  const [kitDraft, setKitDraft] = useState<{ kind: SupportKind; name: string; note: string }>({ kind: "人", name: "", note: "" });
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [journalDraft, setJournalDraft] = useState<JournalEntry>(() => newJournalEntry());
   const [gardenOpen, setGardenOpen] = useState(false);
   const [gardenMoments, setGardenMoments] = useState<GardenMoment[]>([]);
   const [seriousMode, setSeriousMode] = useState(false);
@@ -212,12 +224,12 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      const savedKit = localStorage.getItem("mori-support-kit");
-      if (savedKit) setKitItems(JSON.parse(savedKit) as SupportKitItem[]);
+      const savedJournal = localStorage.getItem("mori-journal-entries");
+      if (savedJournal) setJournalEntries(JSON.parse(savedJournal) as JournalEntry[]);
       const savedGarden = localStorage.getItem("mori-garden-moments");
       if (savedGarden) setGardenMoments(JSON.parse(savedGarden) as GardenMoment[]);
     } catch {
-      localStorage.removeItem("mori-support-kit");
+      localStorage.removeItem("mori-journal-entries");
       localStorage.removeItem("mori-garden-moments");
     }
   }, []);
@@ -464,33 +476,56 @@ export default function Home() {
     setToast("草稿已复制；是否发送仍由你决定");
   }
 
-  function saveKitItem(event: FormEvent) {
-    event.preventDefault();
-    if (!kitDraft.name.trim()) {
-      setToast("先给这份支持起个名字吧");
+  function saveJournalEntry() {
+    const entry = { ...journalDraft, title: journalDraft.title.trim() || "没有标题的一页", updatedAt: Date.now() };
+    setJournalEntries((current) => {
+      const next = [entry, ...current.filter((item) => item.id !== entry.id)].slice(0, 60);
+      localStorage.setItem("mori-journal-entries", JSON.stringify(next));
+      return next;
+    });
+    setJournalDraft(entry);
+    setToast("这一页手账已经保存在这台设备上");
+  }
+
+  async function importJournalImages(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+    const available = Math.max(0, 4 - journalDraft.photos.length);
+    const files = selected.filter((file) => file.type.startsWith("image/") && file.size <= 2 * 1024 * 1024).slice(0, available);
+    event.target.value = "";
+    if (!files.length) {
+      setToast("请选择单张不超过 2MB 的图片");
       return;
     }
-    const item: SupportKitItem = { id: `kit-${Date.now()}`, kind: kitDraft.kind, name: kitDraft.name.trim(), note: kitDraft.note.trim() };
-    setKitItems((current) => {
-      const next = [item, ...current];
-      localStorage.setItem("mori-support-kit", JSON.stringify(next));
-      return next;
-    });
-    setKitDraft({ kind: "人", name: "", note: "" });
-    setToast("已放进求助背包，什么时候使用仍由你决定");
+    const photos = await Promise.all(files.map((file) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("图片读取失败"));
+      reader.readAsDataURL(file);
+    })));
+    setJournalDraft((current) => ({ ...current, photos: [...current.photos, ...photos].slice(0, 4) }));
+    setToast(files.length < selected.length ? "已加入可用图片；每页最多 4 张、单张不超过 2MB" : "图片已经贴到这一页了");
   }
 
-  function removeKitItem(id: string) {
-    setKitItems((current) => {
-      const next = current.filter((item) => item.id !== id);
-      localStorage.setItem("mori-support-kit", JSON.stringify(next));
-      return next;
-    });
-    setToast("已从求助背包移除");
+  function toggleJournalSticker(symbol: string) {
+    setJournalDraft((current) => ({
+      ...current,
+      stickers: current.stickers.includes(symbol) ? current.stickers.filter((item) => item !== symbol) : [...current.stickers, symbol],
+    }));
   }
 
-  function activateKitItem(item: SupportKitItem) {
-    setToast(item.kind === "人" ? `想联系 ${item.name} 的话，可以先从一句简单的话开始。` : `如果你愿意，现在可以试试：${item.name}`);
+  function openJournalEntry(entry: JournalEntry) {
+    setJournalDraft({ ...entry, photos: [...entry.photos], stickers: [...entry.stickers] });
+  }
+
+  function deleteJournalEntry(id: string) {
+    if (!window.confirm("要删除这页手账吗？删除后无法恢复。")) return;
+    setJournalEntries((current) => {
+      const next = current.filter((entry) => entry.id !== id);
+      localStorage.setItem("mori-journal-entries", JSON.stringify(next));
+      return next;
+    });
+    if (journalDraft.id === id) setJournalDraft(newJournalEntry());
+    setToast("这页手账已删除");
   }
 
   function addGardenMoment(kind: GardenKind) {
@@ -532,7 +567,7 @@ export default function Home() {
         <div className="status-pill"><span className="status-dot" />只属于你的安静角落</div>
         <nav className="top-actions" aria-label="MORI 工具">
           <button onClick={() => setMailOpen(true)}>信箱 <span>{letterDrafts.length}</span></button>
-          <button onClick={() => setKitOpen(true)}>求助背包</button>
+          <button onClick={() => setJournalOpen(true)}>MORI 手账</button>
           <button onClick={() => setGardenOpen(true)}>心理花园</button>
           <button className={connected ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
             {connected ? "模型可用" : "连接模型"}
@@ -554,7 +589,7 @@ export default function Home() {
         <div className="floor-rug" aria-hidden="true" />
         <div className="ambient-light" aria-hidden="true"><i /><i /><i /><i /></div>
         <div className="mailbox-object" aria-hidden="true"><span>✉</span><i /></div>
-        <div className="backpack-object" aria-hidden="true"><span>MY<br />SUPPORT<br />KIT</span></div>
+        <div className="journal-object" aria-hidden="true"><span>MY<br />LITTLE<br />JOURNAL</span><i>✿</i></div>
 
         <div
           className={`pet-wrap action-${action} mood-${activeMood.id} ${isDragging ? "is-dragging" : ""}`}
@@ -687,16 +722,32 @@ export default function Home() {
         </Drawer>
       )}
 
-      {kitOpen && (
-        <Drawer title="My Support Kit" subtitle="这是你选择放进来的现实支持" onClose={() => setKitOpen(false)}>
-          <section className="kit-intro"><span>MY<br />SUPPORT<br />KIT</span><div><h3>现实中的支持，也可以先被轻轻放在这里。</h3><p>只有你主动添加的内容会出现。MORI 不会联系任何人，也不会替你做决定。</p></div></section>
-          <form className="kit-form" onSubmit={saveKitItem}>
-            <div><label>类型<select value={kitDraft.kind} onChange={(event) => setKitDraft({ ...kitDraft, kind: event.target.value as SupportKind })}>{SUPPORT_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select></label><label>名称<input value={kitDraft.name} onChange={(event) => setKitDraft({ ...kitDraft, name: event.target.value })} placeholder="例如：Anna、河边散步、呼吸练习" /></label></div>
-            <label>为什么它对你有帮助（可选）<input value={kitDraft.note} onChange={(event) => setKitDraft({ ...kitDraft, note: event.target.value })} placeholder="例如：上次聊完后轻松了一点" /></label>
-            <button type="submit">放进背包</button>
-          </form>
-          {kitItems.length === 0 ? <p className="empty-kit">背包还是空的。你可以先放进一个人、一处安全地点或一种小方法。</p> : <div className="kit-grid">{kitItems.map((item) => <article className="support-card" key={item.id}><span>{item.kind === "人" ? item.name.slice(0, 1) : item.kind === "地点" ? "⌂" : item.kind === "小方法" ? "✦" : "↗"}</span><em>{item.kind}</em><h3>{item.name}</h3><p>{item.note || "这份支持由你自己放进背包。"}</p><div><button onClick={() => activateKitItem(item)}>现在试试</button><button className="remove-item" onClick={() => removeKitItem(item.id)}>移除</button></div></article>)}</div>}
-          <div className="drawer-disclaimer">这里不会替你补全电话、开放时间或服务承诺。添加专业资源时，请以对方官方网站或你亲自核实的信息为准。</div>
+      {journalOpen && (
+        <Drawer title="MORI 的彩色手账" subtitle="把想留下的文字、照片和小贴纸贴在这一页" onClose={() => setJournalOpen(false)} wide>
+          <div className="journal-toolbar">
+            <button type="button" onClick={() => setJournalDraft(newJournalEntry())}>＋ 新的一页</button>
+            <span>{new Date(journalDraft.createdAt).toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })}</span>
+            <button type="button" className="journal-save" onClick={saveJournalEntry}>保存这一页</button>
+          </div>
+          <section className={`journal-page paper-${journalDraft.paper}`} aria-label="正在编辑的手账页">
+            <div className="journal-tape tape-one" /><div className="journal-tape tape-two" />
+            <div className="journal-page-heading"><input value={journalDraft.title} onChange={(event) => setJournalDraft({ ...journalDraft, title: event.target.value })} placeholder="给今天起一个标题" aria-label="手账标题" /><small>{new Date(journalDraft.createdAt).toLocaleDateString("zh-CN")}</small></div>
+            <textarea value={journalDraft.body} onChange={(event) => setJournalDraft({ ...journalDraft, body: event.target.value })} placeholder="今天有什么想贴在这里的片刻？\n不需要写得完整，几个词、一段话都可以。" rows={7} aria-label="手账内容" />
+            {journalDraft.photos.length > 0 && <div className="journal-photos">{journalDraft.photos.map((photo, index) => <figure key={photo}>
+              {/* 用户本地导入的 data URL 不适用服务端图片优化。 */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo} alt={`手账照片 ${index + 1}`} />
+              <button type="button" onClick={() => setJournalDraft((current) => ({ ...current, photos: current.photos.filter((item) => item !== photo) }))} aria-label={`移除第 ${index + 1} 张图片`}>×</button>
+            </figure>)}</div>}
+            {journalDraft.stickers.length > 0 && <div className="journal-stickers" aria-label="已贴上的贴纸">{journalDraft.stickers.map((sticker, index) => <span key={`${sticker}-${index}`}>{sticker}</span>)}</div>}
+          </section>
+          <section className="journal-supplies" aria-label="手账素材">
+            <div className="journal-supplies-heading"><div><span>DECORATE THIS PAGE</span><h3>给这一页加一点颜色</h3></div><label className="image-import">导入图片<input type="file" accept="image/*" multiple onChange={importJournalImages} /></label></div>
+            <div className="paper-picker" aria-label="选择纸张颜色">{JOURNAL_PAPERS.map((paper) => <button type="button" key={paper.id} className={journalDraft.paper === paper.id ? "active" : ""} onClick={() => setJournalDraft({ ...journalDraft, paper: paper.id })}><i className={`paper-swatch ${paper.id}`} />{paper.label}</button>)}</div>
+            <div className="sticker-picker" aria-label="选择贴纸">{JOURNAL_STICKERS.map((sticker) => <button type="button" key={sticker.symbol} className={journalDraft.stickers.includes(sticker.symbol) ? "selected" : ""} onClick={() => toggleJournalSticker(sticker.symbol)} aria-pressed={journalDraft.stickers.includes(sticker.symbol)}><b>{sticker.symbol}</b><span>{sticker.label}</span></button>)}</div>
+          </section>
+          <section className="journal-history" aria-label="已保存手账"><div><h3>已经留下的页</h3><span>{journalEntries.length} 页</span></div>{journalEntries.length === 0 ? <p>还没有保存的手账。写好这一页后，点击“保存这一页”。</p> : <div className="journal-entry-list">{journalEntries.map((entry) => <article key={entry.id} className={`journal-entry-preview paper-${entry.paper}`}><button type="button" className="journal-entry-open" onClick={() => openJournalEntry(entry)}><small>{new Date(entry.updatedAt).toLocaleDateString("zh-CN")}</small><strong>{entry.title}</strong><p>{entry.body || "一页留白，也是一种记录。"}</p><span>{entry.stickers.slice(0, 4).join(" ")}</span></button><button type="button" className="journal-entry-delete" onClick={() => deleteJournalEntry(entry.id)} aria-label={`删除手账：${entry.title}`}>×</button></article>)}</div>}</section>
+          <div className="drawer-disclaimer">文字、贴纸和图片只会在你点击“保存这一页”后保存在这台设备的浏览器中。图片每张不超过 2MB，每页最多 4 张。</div>
         </Drawer>
       )}
 
@@ -757,10 +808,10 @@ export default function Home() {
   );
 }
 
-function Drawer({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
+function Drawer({ title, subtitle, onClose, children, wide = false }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <aside className="drawer">
+      <aside className={`drawer ${wide ? "drawer-wide" : ""}`}>
         <div className="drawer-heading"><div><h2>{title}</h2><p>{subtitle}</p></div><button onClick={onClose} aria-label="关闭">×</button></div>
         <div className="drawer-content">{children}</div>
       </aside>

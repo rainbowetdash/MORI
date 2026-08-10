@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "MORI — My quiet desktop companion",
     description: "A small, private corner for reflection and real-world connection.",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "MORI 与信箱、求助背包站在亮灯的山前" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "MORI 与信箱、彩色手账站在亮灯的山前" }],
   },
   twitter: {
     card: "summary_large_image",

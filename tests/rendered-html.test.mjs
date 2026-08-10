@@ -64,9 +64,12 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /mori-letter-drafts/);
   assert.match(page, /保存草稿/);
   assert.match(page, /不会自动发送/);
-  assert.match(page, /mori-support-kit/);
+  assert.match(page, /mori-journal-entries/);
+  assert.match(page, /JOURNAL_STICKERS/);
+  assert.match(page, /importJournalImages/);
+  assert.match(page, /保存这一页/);
   assert.match(page, /mori-garden-moments/);
-  assert.match(page, /现实中的支持/);
+  assert.match(page, /MORI 的彩色手账/);
   assert.match(page, /不代表健康评估/);
   assert.match(page, /国家卫生健康委/);
   assert.match(page, /worldhealth|who\.int/i);
