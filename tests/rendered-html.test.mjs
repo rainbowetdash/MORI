@@ -99,7 +99,7 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(route, /MORI_SYSTEM_PROMPT/);
   assert.match(route, /像一个安静、清醒、没有急着替人下结论的倾听者/);
   assert.match(route, /不要每一轮都套用/);
-  assert.match(route, /最多两句、约 70 个汉字以内/);
+  assert.match(route, /严格只用一到两句、约 70 个汉字以内/);
   assert.match(route, /反刍、应激状态/);
   assert.match(route, /callOpenAI/);
   assert.match(route, /callAnthropic/);
