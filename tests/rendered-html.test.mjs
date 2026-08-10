@@ -81,6 +81,9 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /walkDirectionRef/);
   assert.match(page, /is-walking/);
   assert.match(page, /const \[action, setAction\] = useState<PetAction>\("walk"\)/);
+  assert.match(page, /type PetAction = "listen" \| "walk" \| "sleep" \| "read" \| "stretch"/);
+  assert.doesNotMatch(page, /label: "发呆"/);
+  assert.match(page, /openBubbleChat/);
   assert.match(page, /thought-bubble-anchor/);
   assert.match(page, /和 MORI 聊聊/);
   assert.match(page, /查看全部聊天/);

@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
-type PetAction = "idle" | "walk" | "sleep" | "read" | "stretch";
+type PetAction = "listen" | "walk" | "sleep" | "read" | "stretch";
 type PetMood = "calm" | "happy" | "curious" | "worried";
 type ChatMessage = {
   id: number;
@@ -71,14 +71,13 @@ const PROVIDERS: Array<{ id: ModelProvider; label: string; baseUrl: string; mode
 ];
 
 const STATES: Array<{ id: PetAction; label: string; symbol: string }> = [
-  { id: "idle", label: "发呆", symbol: "···" },
   { id: "walk", label: "散步", symbol: "↝" },
   { id: "read", label: "看书", symbol: "▤" },
   { id: "sleep", label: "睡觉", symbol: "☾" },
   { id: "stretch", label: "伸懒腰", symbol: "↟" },
 ];
 const ACTION_LINES: Record<PetAction, string[]> = {
-  idle: ["我在这里发会儿呆。", "今天的光落得很慢。", "不做什么也可以。"],
+  listen: ["我在认真听。", "慢慢说，我在这里。", "这件事可以一点点讲。"],
   walk: ["陪我走几步吧。", "慢慢走，也是在往前。", "脚步轻一点，心也会松一点。"],
   read: ["翻一页，世界就安静一点。", "这一段我想读得慢一些。", "字里也藏着小小的休息。"],
   sleep: ["ZZZZZ…", "zzzzz…", "ZZZZzzzz…"],
@@ -262,7 +261,11 @@ export default function Home() {
   useEffect(() => {
     let timer: number;
     const nextMoment = () => {
-      const choices: PetAction[] = ["idle", "walk", "sleep", "read", "stretch"];
+      if (isBubbleChatOpen) {
+        timer = window.setTimeout(nextMoment, 45000 + Math.random() * 45000);
+        return;
+      }
+      const choices: PetAction[] = ["walk", "sleep", "read", "stretch"];
       const next = actionRef.current === "sleep" ? "read" : choices[Math.floor(Math.random() * choices.length)];
       setAction(next);
       setSpeechIndex(Math.floor(Math.random() * ACTION_LINES[next].length));
@@ -270,7 +273,7 @@ export default function Home() {
     };
     timer = window.setTimeout(nextMoment, 50000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [isBubbleChatOpen]);
 
   useEffect(() => {
     if (action !== "walk" || isDragging) return;
@@ -346,8 +349,21 @@ export default function Home() {
     }
     const nextMoodIndex = (moodIndex + 1) % MOODS.length;
     setMoodIndex(nextMoodIndex);
-    if (action === "sleep") setAction("idle");
-    setToast(`MORI 变成了${MOODS[nextMoodIndex].label}的表情`);
+    if (action === "sleep") setAction("walk");
+    setLeafCount((count) => count + 1);
+    setToast(`MORI 变成了${MOODS[nextMoodIndex].label}的表情 · 获得一片叶子`);
+  }
+
+  function openBubbleChat() {
+    setIsBubbleChatOpen(true);
+    setAction("listen");
+    setSpeechIndex(0);
+  }
+
+  function closeBubbleChat() {
+    setIsBubbleChatOpen(false);
+    setAction("walk");
+    setSpeechIndex(0);
   }
 
   function startDragging(event: ReactPointerEvent<HTMLDivElement>) {
@@ -406,7 +422,7 @@ export default function Home() {
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setInput("");
-    setAction("idle");
+    setAction("listen");
     setSeriousMode(false);
 
     if (HIGH_URGENCY_PATTERN.test(text) || SAFEGUARDING_PATTERN.test(text)) {
@@ -433,7 +449,6 @@ export default function Home() {
       }
       window.setTimeout(() => {
         setMessages((current) => [...current, localDemoReply(text)]);
-        if (/(不知道怎么说|爸妈|妈妈|爸爸|家人|朋友|伴侣|医生|咨询师)/.test(text)) setAction("read");
       }, 520);
       return;
     }
@@ -657,7 +672,7 @@ export default function Home() {
   const weeklyMoments = gardenMoments.filter((moment) => moment.createdAt >= weekStart);
   const weeklyConnectionCount = weeklyMoments.filter((moment) => moment.kind === "light").length;
 
-  const activeLabel = STATES.find((item) => item.id === action)?.label ?? "发呆";
+  const activeLabel = action === "listen" ? "倾听" : STATES.find((item) => item.id === action)?.label ?? "散步";
   const activeMood = MOODS[moodIndex];
   const connected = connectionStatus === "verified";
   const providerLabel = PROVIDERS.find((item) => item.id === config.provider)?.label ?? "自定义模型";
@@ -722,7 +737,7 @@ export default function Home() {
             </span>
             <span className="pet-arm arm-left" /><span className="pet-arm arm-right" />
             <span className="pet-foot foot-left" /><span className="pet-foot foot-right" />
-            {action === "read" && <span className="pet-book">little<br />things</span>}
+            {action === "read" && <span className="pet-book"><i>little<br />things</i></span>}
             {action === "sleep" && <span className="sleep-symbols">z<br /><b>z</b></span>}
           </div>
           <div className="pet-name"><strong>MORI</strong><span>{isDragging ? "被抱起来啦 · 松手会回到原状态" : `${activeLabel}中 · 点我换表情`}</span></div>
@@ -734,7 +749,7 @@ export default function Home() {
         >
           <div className={`thought-bubble ${isBubbleChatOpen ? "chatting" : ""}`}>
             {isBubbleChatOpen ? <>
-              <div className="bubble-chat-heading"><span>和 MORI 聊聊</span><button type="button" onClick={() => setIsBubbleChatOpen(false)} aria-label="收起聊天框">×</button></div>
+              <div className="bubble-chat-heading"><span>和 MORI 聊聊</span><button type="button" onClick={closeBubbleChat} aria-label="收起聊天框">×</button></div>
               <div className="bubble-chat-messages" aria-live="polite">
                 {messages.slice(-3).map((message) => <p key={message.id} className={`bubble-message ${message.role}`}>{message.text}</p>)}
                 {isThinking && <p className="bubble-message assistant thinking-message">MORI 正在整理…</p>}
@@ -747,7 +762,7 @@ export default function Home() {
               <button type="button" className="view-all-chats" onClick={() => setChatOpen(true)}>查看全部聊天</button>
             </> : <>
               <p>{ACTION_LINES[action][speechIndex % ACTION_LINES[action].length]}</p>
-              <button type="button" className="bubble-chat-button" onClick={() => setIsBubbleChatOpen(true)}>和 MORI 聊聊</button>
+              <button type="button" className="bubble-chat-button" onClick={openBubbleChat}>和 MORI 聊聊</button>
             </>}
           </div>
         </div>
