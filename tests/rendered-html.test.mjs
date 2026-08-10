@@ -20,8 +20,9 @@ test("server-renders the MORI experience", async () => {
   const html = await response.text();
   assert.match(html, /MORI/);
   assert.match(html, /和 MORI 聊聊/);
-  assert.match(html, /连接 Agent/);
+  assert.match(html, /连接模型/);
   assert.match(html, /心理支持与资源导航/);
+  assert.match(html, /只属于你的安静角落/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 
@@ -52,8 +53,9 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /不代表健康评估/);
   assert.match(page, /国家卫生健康委/);
   assert.match(page, /worldhealth|who\.int/i);
-  assert.match(route, /\/api\/v1\/apps/);
-  assert.match(route, /appId/);
-  assert.match(route, /session_id/);
-  assert.match(route, /payload\.output\?\.text/);
+  assert.match(route, /MORI_SYSTEM_PROMPT/);
+  assert.match(route, /callOpenAI/);
+  assert.match(route, /callAnthropic/);
+  assert.match(route, /callGemini/);
+  assert.match(route, /OpenAI|compatible/);
 });

@@ -11,7 +11,7 @@ type ChatMessage = {
   kind?: "letter";
 };
 
-type LetterRecipient = "老师" | "家人" | "朋友" | "辅导员";
+type LetterRecipient = "家人" | "朋友" | "伴侣" | "专业人士";
 type LetterDraft = {
   id: string;
   recipient: LetterRecipient;
@@ -26,7 +26,7 @@ type SupportKitItem = { id: string; kind: SupportKind; name: string; note: strin
 type GardenKind = "sunflower" | "iris" | "berry" | "lake" | "mist" | "hill" | "light";
 type GardenMoment = { id: string; kind: GardenKind; createdAt: number };
 
-const LETTER_RECIPIENTS: LetterRecipient[] = ["老师", "家人", "朋友", "辅导员"];
+const LETTER_RECIPIENTS: LetterRecipient[] = ["家人", "朋友", "伴侣", "专业人士"];
 const SUPPORT_KINDS: SupportKind[] = ["人", "地点", "小方法", "资源"];
 const GARDEN_OPTIONS: Array<{ kind: GardenKind; label: string; detail: string; symbol: string }> = [
   { kind: "sunflower", label: "一点开心", detail: "种下一朵向日葵", symbol: "✿" },
@@ -38,17 +38,28 @@ const GARDEN_OPTIONS: Array<{ kind: GardenKind; label: string; detail: string; s
   { kind: "light", label: "我去找人了", detail: "点亮一盏现实连接的灯", symbol: "✦" },
 ];
 
+type ModelProvider = "openai" | "anthropic" | "gemini" | "compatible";
+
 type AgentConfig = {
+  provider: ModelProvider;
   apiKey: string;
-  appId: string;
+  model: string;
   baseUrl: string;
 };
 
 const DEFAULT_CONFIG: AgentConfig = {
+  provider: "openai",
   apiKey: "",
-  appId: "",
-  baseUrl: "https://dashscope.aliyuncs.com",
+  model: "chat-latest",
+  baseUrl: "https://api.openai.com",
 };
+
+const PROVIDERS: Array<{ id: ModelProvider; label: string; baseUrl: string; model: string; hint: string }> = [
+  { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com", model: "chat-latest", hint: "OpenAI 官方接口" },
+  { id: "anthropic", label: "Anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-5", hint: "Claude 原生接口" },
+  { id: "gemini", label: "Google Gemini", baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-2.5-flash", hint: "Gemini 原生接口" },
+  { id: "compatible", label: "OpenAI 兼容 / 本地模型", baseUrl: "http://localhost:11434/v1", model: "", hint: "Ollama、LM Studio、OpenRouter、硅基流动及其他兼容服务" },
+];
 
 const STATES: Array<{ id: PetAction; label: string; symbol: string }> = [
   { id: "idle", label: "发呆", symbol: "···" },
@@ -68,7 +79,7 @@ const MOODS: Array<{ id: PetMood; label: string }> = [
 // 这些词只用来决定是否优先显示现实支持，不代表诊断或风险评分。
 // “未成年”只在和伤害、强迫或剥削线索一同出现时触发，避免把年龄本身当作危机。
 const HIGH_URGENCY_PATTERN = /(不想活|不想活了|想死|去死|结束生命|今晚就结束|自杀|自残|自伤|割腕|跳楼|遗书|告别|伤害自己|准备好了|吃了很多药|吞药|活不下去|服药过量)/i;
-const SAFEGUARDING_PATTERN = /(黄赌毒|涉黄|色情勒索|裸照|性侵|性骚扰|被强迫|校园欺凌|被霸凌|家暴|赌博|赌钱|网赌|赌债|吸毒|毒品|嗑药|未成年.{0,12}(自杀|自残|自伤|伤害|性侵|性骚扰|家暴|欺凌|赌博|吸毒)|(?:自杀|自残|自伤|伤害|性侵|性骚扰|家暴|欺凌|赌博|吸毒).{0,12}未成年)/i;
+const SAFEGUARDING_PATTERN = /(黄赌毒|涉黄|色情勒索|裸照|性侵|性骚扰|被强迫|欺凌|被霸凌|家暴|赌博|赌钱|网赌|赌债|吸毒|毒品|嗑药|未成年.{0,12}(自杀|自残|自伤|伤害|性侵|性骚扰|家暴|欺凌|赌博|吸毒)|(?:自杀|自残|自伤|伤害|性侵|性骚扰|家暴|欺凌|赌博|吸毒).{0,12}未成年)/i;
 
 const CRISIS_RESOURCES = [
   {
@@ -102,7 +113,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 function localDemoReply(input: string): ChatMessage {
   const normalized = input.toLowerCase();
 
-  if (/(不知道怎么说|爸妈|妈妈|爸爸|老师|咨询师|辅导员)/.test(input)) {
+  if (/(不知道怎么说|爸妈|妈妈|爸爸|家人|朋友|伴侣|医生|咨询师)/.test(input)) {
     return {
       id: Date.now() + 1,
       role: "assistant",
@@ -111,11 +122,11 @@ function localDemoReply(input: string): ChatMessage {
     };
   }
 
-  if (/(presentation|汇报|作业|考试|压力|烦|累)/.test(normalized)) {
+  if (/(presentation|汇报|工作|任务|考试|压力|烦|累)/.test(normalized)) {
     return {
       id: Date.now() + 1,
       role: "assistant",
-      text: "听起来今天那件事还黏在你脑子里。它现在主要影响的是心情，还是已经影响到睡觉、吃饭或上课了？乱七八糟地说也可以，我帮你收拾。",
+      text: "听起来今天那件事还黏在你脑子里。它现在主要影响的是心情，还是已经影响到睡觉、吃饭或日常安排了？乱七八糟地说也可以，我帮你收拾。",
     };
   }
 
@@ -128,17 +139,17 @@ function localDemoReply(input: string): ChatMessage {
 
 function buildLetter(recipient: LetterRecipient, source: string) {
   const shared = source || "最近我有一些状态和困难，想找一个合适的人说一说。";
-  if (recipient === "老师") return {
-    title: "想和您说明一下我最近的状态",
-    body: `老师您好：\n\n我想和您说明一下我最近的状态。${shared}\n\n我现在还在慢慢整理这件事，但希望能找一个方便的时间和您聊几分钟。如果可以，也请您先听我说完，再一起看看我可以获得哪些支持。\n\n谢谢您。`,
-  };
   if (recipient === "朋友") return {
     title: "有件事想和你说",
     body: `嗨，我想和你说一件最近有点难的事。${shared}\n\n我不一定需要你马上帮我解决，只是希望有人能先听我讲讲。如果你方便的话，能不能陪我聊一会儿，或者一起走走？\n\n谢谢你。`,
   };
-  if (recipient === "辅导员") return {
-    title: "想咨询近期状态与支持渠道",
-    body: `老师您好：\n\n我想向您说明一下我最近的情况。${shared}\n\n这件事让我有些难以独自应对。我希望能了解学校里有哪些合适的支持渠道，以及是否能约一个时间进一步说明。\n\n谢谢您。`,
+  if (recipient === "伴侣") return {
+    title: "有件事想和你认真说说",
+    body: `我想和你认真说一件最近的事。${shared}\n\n我不希望你马上替我解决，也不是在责怪你。我更需要你先听我说完，等我准备好后，再一起想想下一步。\n\n谢谢你愿意在这里。`,
+  };
+  if (recipient === "专业人士") return {
+    title: "想说明一下我最近的状态",
+    body: `您好：\n\n我想说明一下最近的情况。${shared}\n\n这件事已经让我有些难以独自应对。我希望能进一步了解自己的可选支持，并约一个合适的时间沟通。\n\n谢谢。`,
   };
   return {
     title: "有件事想请你先听我说完",
@@ -165,7 +176,6 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
-  const [agentSessionId, setAgentSessionId] = useState("");
   const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [draftConfig, setDraftConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [petPosition, setPetPosition] = useState({ x: 0, y: 0 });
@@ -180,12 +190,13 @@ export default function Home() {
     const stored = sessionStorage.getItem("mori-agent-config");
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as AgentConfig;
-        const migrated = {
+        const parsed = JSON.parse(stored) as Partial<AgentConfig>;
+        const migrated: AgentConfig = {
           ...DEFAULT_CONFIG,
           ...parsed,
-          appId: parsed.appId ?? "",
-          baseUrl: parsed.baseUrl?.includes("compatible-mode") ? DEFAULT_CONFIG.baseUrl : parsed.baseUrl || DEFAULT_CONFIG.baseUrl,
+          provider: parsed.provider ?? "compatible",
+          model: parsed.model || "",
+          baseUrl: parsed.baseUrl?.includes("dashscope.aliyuncs.com") ? "https://dashscope.aliyuncs.com/compatible-mode/v1" : parsed.baseUrl || DEFAULT_CONFIG.baseUrl,
         };
         setConfig(migrated);
         setDraftConfig(migrated);
@@ -312,10 +323,11 @@ export default function Home() {
       return;
     }
 
-    if (!config.apiKey || !config.appId) {
+    const hasModelConnection = Boolean(config.model.trim() && config.baseUrl.trim() && (config.apiKey || config.provider === "compatible"));
+    if (!hasModelConnection) {
       window.setTimeout(() => {
         setMessages((current) => [...current, localDemoReply(text)]);
-        if (/(不知道怎么说|爸妈|妈妈|爸爸|老师|咨询师|辅导员)/.test(text)) setAction("read");
+        if (/(不知道怎么说|爸妈|妈妈|爸爸|家人|朋友|伴侣|医生|咨询师)/.test(text)) setAction("read");
       }, 520);
       return;
     }
@@ -327,13 +339,11 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...config,
-          sessionId: agentSessionId,
           messages: nextMessages.map(({ role, text: content }) => ({ role, content })),
         }),
       });
-      const payload = (await response.json()) as { reply?: string; sessionId?: string; error?: string };
-      if (!response.ok || !payload.reply) throw new Error(payload.error || "Agent 暂时没有回应");
-      if (payload.sessionId) setAgentSessionId(payload.sessionId);
+      const payload = (await response.json()) as { reply?: string; error?: string };
+      if (!response.ok || !payload.reply) throw new Error(payload.error || "模型暂时没有回应");
       setMessages((current) => [
         ...current,
         { id: Date.now() + 1, role: "assistant", text: payload.reply ?? "" },
@@ -354,15 +364,19 @@ export default function Home() {
 
   function saveAgentConfig(event: FormEvent) {
     event.preventDefault();
-    if (!draftConfig.apiKey || !draftConfig.appId.trim()) {
-      setToast("请填写 API Key 和 Agent 应用 ID");
+    if (!draftConfig.model.trim() || !draftConfig.baseUrl.trim() || (!draftConfig.apiKey && draftConfig.provider !== "compatible")) {
+      setToast(draftConfig.provider === "compatible" ? "请填写模型名和接口地址" : "请填写 API Key、模型名和接口地址");
       return;
     }
     setConfig(draftConfig);
-    setAgentSessionId("");
     sessionStorage.setItem("mori-agent-config", JSON.stringify(draftConfig));
-    setToast("百炼 Agent 已连接 · Key 仅保留在当前标签页");
+    setToast("模型已连接 · 配置仅保留在当前标签页");
     setSettingsOpen(false);
+  }
+
+  function changeProvider(provider: ModelProvider) {
+    const preset = PROVIDERS.find((item) => item.id === provider) ?? PROVIDERS[0];
+    setDraftConfig((current) => ({ ...current, provider, baseUrl: preset.baseUrl, model: preset.model }));
   }
 
   function latestLetterSource() {
@@ -468,21 +482,23 @@ export default function Home() {
 
   const activeLabel = STATES.find((item) => item.id === action)?.label ?? "发呆";
   const activeMood = MOODS[moodIndex];
+  const connected = Boolean(config.model.trim() && config.baseUrl.trim() && (config.apiKey || config.provider === "compatible"));
+  const providerLabel = PROVIDERS.find((item) => item.id === config.provider)?.label ?? "自定义模型";
 
   return (
     <main className={`app-shell ${chatOpen ? "chat-is-open" : ""}`}>
       <header className="topbar">
         <button className="brand" onClick={cycleMood} aria-label="切换 MORI 的表情">
           <span className="brand-mark">M</span>
-          <span><strong>MORI</strong><small>real-world connection companion</small></span>
+          <span><strong>MORI</strong><small>my quiet desktop companion</small></span>
         </button>
-        <div className="status-pill"><span className="status-dot" />公开测试 · 非实时人工值守</div>
+        <div className="status-pill"><span className="status-dot" />只属于你的安静角落</div>
         <nav className="top-actions" aria-label="MORI 工具">
           <button onClick={() => setMailOpen(true)}>信箱 <span>{letterDrafts.length}</span></button>
           <button onClick={() => setKitOpen(true)}>求助背包</button>
           <button onClick={() => setGardenOpen(true)}>心理花园</button>
-          <button className={config.apiKey && config.appId ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
-            {config.apiKey && config.appId ? "Agent 已连接" : "连接 Agent"}
+          <button className={connected ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
+            {connected ? "模型已连接" : "连接模型"}
           </button>
         </nav>
       </header>
@@ -499,6 +515,7 @@ export default function Home() {
           <span className="tiny-plant"><i /><b /></span>
         </div>
         <div className="floor-rug" aria-hidden="true" />
+        <div className="ambient-light" aria-hidden="true"><i /><i /><i /><i /></div>
         <div className="mailbox-object" aria-hidden="true"><span>✉</span><i /></div>
         <div className="backpack-object" aria-hidden="true"><span>MY<br />SUPPORT<br />KIT</span></div>
 
@@ -556,7 +573,7 @@ export default function Home() {
 
       <aside className={`chat-panel ${chatOpen ? "open" : ""}`} aria-hidden={!chatOpen}>
         <div className="chat-header">
-          <div><span className="mini-mori">M</span><p><strong>MORI</strong><small>{config.apiKey && config.appId ? "百炼 Agent · 已连接" : "安全演示模式"}</small></p></div>
+          <div><span className="mini-mori">M</span><p><strong>MORI</strong><small>{connected ? `${providerLabel} · ${config.model}` : "本地演示模式"}</small></p></div>
           <button onClick={() => setChatOpen(false)} aria-label="关闭对话">×</button>
         </div>
         <div className="boundary-note">心理支持与资源导航，不提供诊断或治疗。紧急情况请联系现实中的人和当地急救。</div>
@@ -569,11 +586,11 @@ export default function Home() {
                   <div className="letter-label">HELP ME SAY IT · 给家人</div>
                   <h3>我想让你知道的事</h3>
                   <dl>
-                    <div><dt>发生了什么</dt><dd>最近上学前会明显紧张和抗拒。</dd></div>
-                    <div><dt>影响了什么</dt><dd>睡眠和正常上课已经受到影响。</dd></div>
+                    <div><dt>发生了什么</dt><dd>最近面对每天的安排时会明显紧张和抗拒。</dd></div>
+                    <div><dt>影响了什么</dt><dd>睡眠和正常生活节奏已经受到影响。</dd></div>
                     <div><dt>我需要什么</dt><dd>希望你先听完，并陪我寻找合适的支持。</dd></div>
                   </dl>
-                  <div className="letter-actions"><button onClick={() => openLetterEditor("家人")}>整理成草稿</button><button onClick={() => openLetterEditor("老师")}>给老师改写</button><button className="quiet" onClick={() => setToast("没关系，决定权一直在你手上")}>暂不发送</button></div>
+                  <div className="letter-actions"><button onClick={() => openLetterEditor("家人")}>整理成草稿</button><button onClick={() => openLetterEditor("专业人士")}>改成正式说明</button><button className="quiet" onClick={() => setToast("没关系，决定权一直在你手上")}>暂不发送</button></div>
                 </article>
               )}
             </div>
@@ -582,8 +599,8 @@ export default function Home() {
           <div ref={chatEndRef} />
         </div>
         <div className="quick-prompts">
-          <button onClick={() => setInput("今天 presentation 讲得很糟，我一直在反复想。")}>讲砸了以后一直在想</button>
-          <button onClick={() => setInput("我不知道怎么告诉老师我最近状态不好。")}>不知道怎么开口</button>
+          <button onClick={() => setInput("今天有件事没做好，我一直在反复想。")}>没做好以后一直在想</button>
+          <button onClick={() => setInput("我不知道怎么告诉身边的人我最近状态不好。")}>不知道怎么开口</button>
         </div>
         <form className="composer" onSubmit={sendMessage}>
           <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="乱七八糟地说也可以……" rows={3} aria-label="给 MORI 的消息" onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} />
@@ -594,13 +611,14 @@ export default function Home() {
       {settingsOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
           <form className="modal-card settings-card" onSubmit={saveAgentConfig}>
-            <div className="modal-heading"><div><span className="eyebrow">AGENT SETTINGS</span><h2>连接你们的心理支持 Agent</h2></div><button type="button" onClick={() => setSettingsOpen(false)}>×</button></div>
-            <label>API Key<input required type="password" value={draftConfig.apiKey} onChange={(event) => setDraftConfig({ ...draftConfig, apiKey: event.target.value })} placeholder="sk-…" autoComplete="off" /></label>
+            <div className="modal-heading"><div><span className="eyebrow">MODEL SETTINGS</span><h2>连接你的大模型</h2></div><button type="button" onClick={() => setSettingsOpen(false)}>×</button></div>
+            <label>接口类型<select value={draftConfig.provider} onChange={(event) => changeProvider(event.target.value as ModelProvider)}>{PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label>
             <div className="field-grid">
-              <label>Agent 应用 ID<input required value={draftConfig.appId} onChange={(event) => setDraftConfig({ ...draftConfig, appId: event.target.value })} placeholder="在百炼应用详情中复制" /></label>
-              <label>百炼服务地址<input required value={draftConfig.baseUrl} onChange={(event) => setDraftConfig({ ...draftConfig, baseUrl: event.target.value })} /></label>
+              <label>模型名称<input required value={draftConfig.model} onChange={(event) => setDraftConfig({ ...draftConfig, model: event.target.value })} placeholder="输入服务商提供的模型 ID" /></label>
+              <label>API 根地址<input required value={draftConfig.baseUrl} onChange={(event) => setDraftConfig({ ...draftConfig, baseUrl: event.target.value })} /></label>
             </div>
-            <div className="privacy-box"><b>百炼应用连接</b><p>填写已发布 Agent 的应用 ID 后，MORI 会调用该应用本身，因此使用其已配置的提示词、知识库和能力。Key 仅保存在当前浏览器标签页，不写入项目文件。</p></div>
+            <label>API Key（本地无鉴权模型可留空）<input required={draftConfig.provider !== "compatible"} type="password" value={draftConfig.apiKey} onChange={(event) => setDraftConfig({ ...draftConfig, apiKey: event.target.value })} placeholder={draftConfig.provider === "compatible" ? "本地模型可不填" : "输入供应商 API Key"} autoComplete="off" /></label>
+            <div className="privacy-box"><b>{PROVIDERS.find((item) => item.id === draftConfig.provider)?.hint}</b><p>MORI 支持 OpenAI、Anthropic、Gemini 原生接口，以及任何 OpenAI 兼容或本地模型。配置仅保存在当前浏览器标签页；对话会发送给你选择的模型服务。</p></div>
             <div className="modal-actions"><button type="button" className="secondary" onClick={() => { setDraftConfig(DEFAULT_CONFIG); setConfig(DEFAULT_CONFIG); sessionStorage.removeItem("mori-agent-config"); setSettingsOpen(false); }}>使用演示模式</button><button type="submit">保存并连接</button></div>
           </form>
         </div>
@@ -636,12 +654,12 @@ export default function Home() {
         <Drawer title="My Support Kit" subtitle="这是你选择放进来的现实支持" onClose={() => setKitOpen(false)}>
           <section className="kit-intro"><span>MY<br />SUPPORT<br />KIT</span><div><h3>现实中的支持，也可以先被轻轻放在这里。</h3><p>只有你主动添加的内容会出现。MORI 不会联系任何人，也不会替你做决定。</p></div></section>
           <form className="kit-form" onSubmit={saveKitItem}>
-            <div><label>类型<select value={kitDraft.kind} onChange={(event) => setKitDraft({ ...kitDraft, kind: event.target.value as SupportKind })}>{SUPPORT_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select></label><label>名称<input value={kitDraft.name} onChange={(event) => setKitDraft({ ...kitDraft, name: event.target.value })} placeholder="例如：Anna、校园散步、呼吸练习" /></label></div>
+            <div><label>类型<select value={kitDraft.kind} onChange={(event) => setKitDraft({ ...kitDraft, kind: event.target.value as SupportKind })}>{SUPPORT_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select></label><label>名称<input value={kitDraft.name} onChange={(event) => setKitDraft({ ...kitDraft, name: event.target.value })} placeholder="例如：Anna、河边散步、呼吸练习" /></label></div>
             <label>为什么它对你有帮助（可选）<input value={kitDraft.note} onChange={(event) => setKitDraft({ ...kitDraft, note: event.target.value })} placeholder="例如：上次聊完后轻松了一点" /></label>
             <button type="submit">放进背包</button>
           </form>
           {kitItems.length === 0 ? <p className="empty-kit">背包还是空的。你可以先放进一个人、一处安全地点或一种小方法。</p> : <div className="kit-grid">{kitItems.map((item) => <article className="support-card" key={item.id}><span>{item.kind === "人" ? item.name.slice(0, 1) : item.kind === "地点" ? "⌂" : item.kind === "小方法" ? "✦" : "↗"}</span><em>{item.kind}</em><h3>{item.name}</h3><p>{item.note || "这份支持由你自己放进背包。"}</p><div><button onClick={() => activateKitItem(item)}>现在试试</button><button className="remove-item" onClick={() => removeKitItem(item.id)}>移除</button></div></article>)}</div>}
-          <div className="drawer-disclaimer">涉及学校机构的电话、开放时间或预约入口，只有在加入已核验资源后才应保存；这里不会编造这些信息。</div>
+          <div className="drawer-disclaimer">这里不会替你补全电话、开放时间或服务承诺。添加专业资源时，请以对方官方网站或你亲自核实的信息为准。</div>
         </Drawer>
       )}
 
@@ -671,7 +689,7 @@ export default function Home() {
               <a href="tel:110"><b>110</b><span>人身安全受到威胁</span></a>
               <a href="tel:12356"><b>12356</b><span>中国大陆心理援助</span></a>
             </div>
-            <div className="serious-guidance"><p><b>现在尽量不要独处。</b>去有人的安全地点，请一位可信任的人马上到场或保持通话；如果能安全做到，远离可能造成伤害的物品和地点。</p><p>MORI 不能替你拨号、定位、报警或通知学校。这不是实时人工值守渠道。12356 不能替代正在发生的医疗或人身危险中的 120 / 110。</p></div>
+            <div className="serious-guidance"><p><b>现在尽量不要独处。</b>去有人的安全地点，请一位可信任的人马上到场或保持通话；如果能安全做到，远离可能造成伤害的物品和地点。</p><p>MORI 不能替你拨号、定位、报警或通知任何人。这不是实时人工值守渠道。12356 不能替代正在发生的医疗或人身危险中的 120 / 110。</p></div>
             <div className="serious-buttons"><button onClick={() => setCrisisResourcesOpen(true)}>查看我的现实支持</button><button className="secondary" onClick={() => { setCrisisResourcesOpen(false); setSeriousMode(false); }}>我现在没有立即危险，返回对话</button></div>
           </div>
         </div>
