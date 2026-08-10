@@ -57,10 +57,10 @@ type AgentConfig = {
 };
 
 const DEFAULT_CONFIG: AgentConfig = {
-  provider: "openai",
+  provider: "compatible",
   apiKey: "",
-  model: "chat-latest",
-  baseUrl: "https://api.openai.com",
+  model: "deepseek-v4-flash",
+  baseUrl: "https://api.deepseek.com",
 };
 
 const PROVIDERS: Array<{ id: ModelProvider; label: string; baseUrl: string; model: string; hint: string }> = [
@@ -219,7 +219,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [isVerifyingConnection, setIsVerifyingConnection] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("demo");
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("verified");
   const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [draftConfig, setDraftConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [petPosition, setPetPosition] = useState({ x: 0, y: 0 });
@@ -234,27 +234,6 @@ export default function Home() {
   const walkDirectionRef = useRef<1 | -1>(1);
   const journalPageRef = useRef<HTMLElement>(null);
   const journalStickerDragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null);
-
-  useEffect(() => {
-    const stored = sessionStorage.getItem("mori-agent-config");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Partial<AgentConfig>;
-        const migrated: AgentConfig = {
-          ...DEFAULT_CONFIG,
-          ...parsed,
-          provider: parsed.provider ?? "compatible",
-          model: parsed.model || "",
-          baseUrl: parsed.baseUrl?.includes("dashscope.aliyuncs.com") ? "https://dashscope.aliyuncs.com/compatible-mode/v1" : parsed.baseUrl || DEFAULT_CONFIG.baseUrl,
-        };
-        setConfig(migrated);
-        setDraftConfig(migrated);
-        setConnectionStatus("configured");
-      } catch {
-        sessionStorage.removeItem("mori-agent-config");
-      }
-    }
-  }, []);
 
   useEffect(() => { actionRef.current = action; }, [action]);
 
@@ -495,9 +474,8 @@ export default function Home() {
       const payload = (await response.json()) as { reply?: string; error?: string };
       if (!response.ok || !payload.reply) throw new Error(payload.error || "模型没有返回可验证的文字");
       setConfig(draftConfig);
-      sessionStorage.setItem("mori-agent-config", JSON.stringify(draftConfig));
       setConnectionStatus("verified");
-      setToast("模型已验证可用 · 配置仅保留在当前标签页");
+      setToast("模型已验证可用 · 你的自定义配置仅保留在当前标签页");
       setSettingsOpen(false);
     } catch (error) {
       setConnectionStatus("failed");

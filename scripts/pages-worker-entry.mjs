@@ -19,6 +19,11 @@ export default {
       return env.ASSETS.fetch(request);
     }
 
-    return app.fetch(request, env, ctx);
+    // The browser never receives this secret. Only the default test model gets
+    // the key, and the API route verifies its exact model and endpoint first.
+    const headers = new Headers(request.headers);
+    headers.delete("x-mori-default-deepseek-key");
+    if (env.MORI_DEEPSEEK_API_KEY) headers.set("x-mori-default-deepseek-key", env.MORI_DEEPSEEK_API_KEY);
+    return app.fetch(new Request(request, { headers }), env, ctx);
   },
 };

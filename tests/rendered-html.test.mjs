@@ -35,7 +35,7 @@ test("server-renders the MORI experience", async () => {
   const html = await response.text();
   assert.match(html, /MORI/);
   assert.match(html, /和 MORI 聊聊/);
-  assert.match(html, /连接模型/);
+  assert.match(html, /模型可用/);
   assert.match(html, /心理支持与资源导航/);
   assert.match(html, /只属于你的安静角落/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
@@ -101,6 +101,11 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(route, /callAnthropic/);
   assert.match(route, /callGemini/);
   assert.match(route, /OpenAI|compatible/);
+  assert.match(page, /model: "deepseek-v4-flash"/);
+  assert.match(page, /baseUrl: "https:\/\/api\.deepseek\.com"/);
+  assert.match(route, /DEFAULT_TEST_MODEL/);
+  assert.match(route, /x-mori-default-deepseek-key/);
+  assert.match(route, /isDefaultTestModel/);
   assert.match(page, /验证并连接/);
   assert.match(page, /模型尚未验证，本条没有发送到模型服务/);
   assert.match(page, /未自动改用演示回复/);
