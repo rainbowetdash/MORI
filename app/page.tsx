@@ -39,6 +39,7 @@ const GARDEN_OPTIONS: Array<{ kind: GardenKind; label: string; detail: string; s
 ];
 
 type ModelProvider = "openai" | "anthropic" | "gemini" | "compatible";
+type ConnectionStatus = "demo" | "configured" | "verified" | "failed";
 
 type AgentConfig = {
   provider: ModelProvider;
@@ -58,7 +59,7 @@ const PROVIDERS: Array<{ id: ModelProvider; label: string; baseUrl: string; mode
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com", model: "chat-latest", hint: "OpenAI 官方接口" },
   { id: "anthropic", label: "Anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-5", hint: "Claude 原生接口" },
   { id: "gemini", label: "Google Gemini", baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-2.5-flash", hint: "Gemini 原生接口" },
-  { id: "compatible", label: "OpenAI 兼容 / 本地模型", baseUrl: "http://localhost:11434/v1", model: "", hint: "Ollama、LM Studio、OpenRouter、硅基流动及其他兼容服务" },
+  { id: "compatible", label: "OpenAI 兼容接口", baseUrl: "", model: "", hint: "OpenRouter、硅基流动及其他兼容服务" },
 ];
 
 const STATES: Array<{ id: PetAction; label: string; symbol: string }> = [
@@ -176,6 +177,8 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [isVerifyingConnection, setIsVerifyingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("demo");
   const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [draftConfig, setDraftConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [petPosition, setPetPosition] = useState({ x: 0, y: 0 });
@@ -200,6 +203,7 @@ export default function Home() {
         };
         setConfig(migrated);
         setDraftConfig(migrated);
+        setConnectionStatus("configured");
       } catch {
         sessionStorage.removeItem("mori-agent-config");
       }
@@ -309,6 +313,7 @@ export default function Home() {
     setMessages(nextMessages);
     setInput("");
     setAction("idle");
+    setSeriousMode(false);
 
     if (HIGH_URGENCY_PATTERN.test(text) || SAFEGUARDING_PATTERN.test(text)) {
       setSeriousMode(true);
@@ -323,8 +328,15 @@ export default function Home() {
       return;
     }
 
-    const hasModelConnection = Boolean(config.model.trim() && config.baseUrl.trim() && (config.apiKey || config.provider === "compatible"));
-    if (!hasModelConnection) {
+    if (connectionStatus !== "verified") {
+      if (connectionStatus !== "demo") {
+        setMessages((current) => [...current, {
+          id: Date.now() + 1,
+          role: "assistant",
+          text: "模型尚未验证，本条没有发送到模型服务。请打开「连接模型」，点击“验证并连接”后再试。",
+        }]);
+        return;
+      }
       window.setTimeout(() => {
         setMessages((current) => [...current, localDemoReply(text)]);
         if (/(不知道怎么说|爸妈|妈妈|爸爸|家人|朋友|伴侣|医生|咨询师)/.test(text)) setAction("read");
@@ -348,13 +360,15 @@ export default function Home() {
         ...current,
         { id: Date.now() + 1, role: "assistant", text: payload.reply ?? "" },
       ]);
+      setConnectionStatus("verified");
     } catch (error) {
+      setConnectionStatus("failed");
       setMessages((current) => [
         ...current,
         {
           id: Date.now() + 1,
           role: "assistant",
-          text: `连接没有成功：${error instanceof Error ? error.message : "请检查设置"}。你仍可继续使用本地演示模式。`,
+          text: `连接没有成功：${error instanceof Error ? error.message : "请检查设置"}。未自动改用演示回复，请检查设置后重试。`,
         },
       ]);
     } finally {
@@ -362,16 +376,35 @@ export default function Home() {
     }
   }
 
-  function saveAgentConfig(event: FormEvent) {
+  async function saveAgentConfig(event: FormEvent) {
     event.preventDefault();
     if (!draftConfig.model.trim() || !draftConfig.baseUrl.trim() || (!draftConfig.apiKey && draftConfig.provider !== "compatible")) {
       setToast(draftConfig.provider === "compatible" ? "请填写模型名和接口地址" : "请填写 API Key、模型名和接口地址");
       return;
     }
-    setConfig(draftConfig);
-    sessionStorage.setItem("mori-agent-config", JSON.stringify(draftConfig));
-    setToast("模型已连接 · 配置仅保留在当前标签页");
-    setSettingsOpen(false);
+    setIsVerifyingConnection(true);
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...draftConfig,
+          messages: [{ role: "user", content: "请只回复“连接成功”。" }],
+        }),
+      });
+      const payload = (await response.json()) as { reply?: string; error?: string };
+      if (!response.ok || !payload.reply) throw new Error(payload.error || "模型没有返回可验证的文字");
+      setConfig(draftConfig);
+      sessionStorage.setItem("mori-agent-config", JSON.stringify(draftConfig));
+      setConnectionStatus("verified");
+      setToast("模型已验证可用 · 配置仅保留在当前标签页");
+      setSettingsOpen(false);
+    } catch (error) {
+      setConnectionStatus("failed");
+      setToast(`未能验证连接：${error instanceof Error ? error.message : "请检查设置"}`);
+    } finally {
+      setIsVerifyingConnection(false);
+    }
   }
 
   function changeProvider(provider: ModelProvider) {
@@ -482,7 +515,7 @@ export default function Home() {
 
   const activeLabel = STATES.find((item) => item.id === action)?.label ?? "发呆";
   const activeMood = MOODS[moodIndex];
-  const connected = Boolean(config.model.trim() && config.baseUrl.trim() && (config.apiKey || config.provider === "compatible"));
+  const connected = connectionStatus === "verified";
   const providerLabel = PROVIDERS.find((item) => item.id === config.provider)?.label ?? "自定义模型";
 
   return (
@@ -498,7 +531,7 @@ export default function Home() {
           <button onClick={() => setKitOpen(true)}>求助背包</button>
           <button onClick={() => setGardenOpen(true)}>心理花园</button>
           <button className={connected ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
-            {connected ? "模型已连接" : "连接模型"}
+            {connected ? "模型可用" : "连接模型"}
           </button>
         </nav>
       </header>
@@ -573,7 +606,7 @@ export default function Home() {
 
       <aside className={`chat-panel ${chatOpen ? "open" : ""}`} aria-hidden={!chatOpen}>
         <div className="chat-header">
-          <div><span className="mini-mori">M</span><p><strong>MORI</strong><small>{connected ? `${providerLabel} · ${config.model}` : "本地演示模式"}</small></p></div>
+          <div><span className="mini-mori">M</span><p><strong>MORI</strong><small>{seriousMode ? "安全提示 · 不调用模型" : connected ? `已验证 · ${providerLabel} · ${config.model}` : connectionStatus === "configured" ? "已配置 · 尚未验证" : connectionStatus === "failed" ? "连接失败 · 请重新验证" : "本地演示模式"}</small></p></div>
           <button onClick={() => setChatOpen(false)} aria-label="关闭对话">×</button>
         </div>
         <div className="boundary-note">心理支持与资源导航，不提供诊断或治疗。紧急情况请联系现实中的人和当地急救。</div>
@@ -617,9 +650,9 @@ export default function Home() {
               <label>模型名称<input required value={draftConfig.model} onChange={(event) => setDraftConfig({ ...draftConfig, model: event.target.value })} placeholder="输入服务商提供的模型 ID" /></label>
               <label>API 根地址<input required value={draftConfig.baseUrl} onChange={(event) => setDraftConfig({ ...draftConfig, baseUrl: event.target.value })} /></label>
             </div>
-            <label>API Key（本地无鉴权模型可留空）<input required={draftConfig.provider !== "compatible"} type="password" value={draftConfig.apiKey} onChange={(event) => setDraftConfig({ ...draftConfig, apiKey: event.target.value })} placeholder={draftConfig.provider === "compatible" ? "本地模型可不填" : "输入供应商 API Key"} autoComplete="off" /></label>
-            <div className="privacy-box"><b>{PROVIDERS.find((item) => item.id === draftConfig.provider)?.hint}</b><p>MORI 支持 OpenAI、Anthropic、Gemini 原生接口，以及任何 OpenAI 兼容或本地模型。配置仅保存在当前浏览器标签页；对话会发送给你选择的模型服务。</p></div>
-            <div className="modal-actions"><button type="button" className="secondary" onClick={() => { setDraftConfig(DEFAULT_CONFIG); setConfig(DEFAULT_CONFIG); sessionStorage.removeItem("mori-agent-config"); setSettingsOpen(false); }}>使用演示模式</button><button type="submit">保存并连接</button></div>
+            <label>API Key（由服务商要求；无鉴权 HTTPS 服务可留空）<input required={draftConfig.provider !== "compatible"} type="password" value={draftConfig.apiKey} onChange={(event) => setDraftConfig({ ...draftConfig, apiKey: event.target.value })} placeholder={draftConfig.provider === "compatible" ? "无鉴权服务可留空" : "输入供应商 API Key"} autoComplete="off" /></label>
+            <div className="privacy-box"><b>{PROVIDERS.find((item) => item.id === draftConfig.provider)?.hint}</b><p>保存时 MORI 会先发起一次真实 API 请求，只有成功才显示“模型可用”。支持 OpenAI、Anthropic、Gemini 与任何 OpenAI 兼容的 HTTPS 服务；线上版不能连接你电脑上的 localhost。配置仅保存在当前浏览器标签页；对话会发送给你选择的模型服务。</p></div>
+            <div className="modal-actions"><button type="button" className="secondary" onClick={() => { setDraftConfig(DEFAULT_CONFIG); setConfig(DEFAULT_CONFIG); setConnectionStatus("demo"); sessionStorage.removeItem("mori-agent-config"); setSettingsOpen(false); }}>使用演示模式</button><button type="submit" disabled={isVerifyingConnection}>{isVerifyingConnection ? "正在验证…" : "验证并连接"}</button></div>
           </form>
         </div>
       )}

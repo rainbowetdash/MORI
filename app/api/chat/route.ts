@@ -37,10 +37,12 @@ function apiUrl(baseUrl: string, suffix: string) {
   return new URL(`${normalized}${suffix}`);
 }
 
-function validateEndpoint(endpoint: URL) {
+function validateEndpoint(endpoint: URL, allowLocal: boolean) {
   const isLocal = endpoint.hostname === "localhost" || endpoint.hostname === "127.0.0.1" || endpoint.hostname === "[::1]";
-  return endpoint.protocol === "https:" || (endpoint.protocol === "http:" && isLocal);
+  return endpoint.protocol === "https:" || (allowLocal && endpoint.protocol === "http:" && isLocal);
 }
+
+const endpointError = "接口地址必须使用 HTTPS。线上 MORI 无法访问你电脑上的 localhost；如需本机模型，请在本机运行 MORI。";
 
 async function readPayload(response: Response) {
   const text = await response.text();
@@ -59,9 +61,9 @@ function errorMessage(payload: Record<string, unknown>) {
   return "模型服务连接失败";
 }
 
-async function callOpenAI(body: Required<Pick<ChatBody, "provider" | "model" | "baseUrl">> & Pick<ChatBody, "apiKey"> & { messages: ChatMessage[] }) {
+async function callOpenAI(body: Required<Pick<ChatBody, "provider" | "model" | "baseUrl">> & Pick<ChatBody, "apiKey"> & { messages: ChatMessage[] }, allowLocal: boolean) {
   const endpoint = apiUrl(body.baseUrl, "/v1/chat/completions");
-  if (!validateEndpoint(endpoint)) throw new Error("接口地址必须使用 HTTPS；本机模型可使用 localhost HTTP");
+  if (!validateEndpoint(endpoint, allowLocal)) throw new Error(endpointError);
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -80,9 +82,9 @@ async function callOpenAI(body: Required<Pick<ChatBody, "provider" | "model" | "
   return typeof content === "string" ? content.trim() : content?.map((part) => part.text || "").join("").trim();
 }
 
-async function callAnthropic(body: Required<Pick<ChatBody, "model" | "baseUrl" | "apiKey">> & { messages: ChatMessage[] }) {
+async function callAnthropic(body: Required<Pick<ChatBody, "model" | "baseUrl" | "apiKey">> & { messages: ChatMessage[] }, allowLocal: boolean) {
   const endpoint = apiUrl(body.baseUrl, "/v1/messages");
-  if (!validateEndpoint(endpoint)) throw new Error("接口地址必须使用 HTTPS");
+  if (!validateEndpoint(endpoint, allowLocal)) throw new Error(endpointError);
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": body.apiKey, "anthropic-version": "2023-06-01" },
@@ -94,9 +96,9 @@ async function callAnthropic(body: Required<Pick<ChatBody, "model" | "baseUrl" |
   return content?.filter((part) => part.type === "text").map((part) => part.text || "").join("\n").trim();
 }
 
-async function callGemini(body: Required<Pick<ChatBody, "model" | "baseUrl" | "apiKey">> & { messages: ChatMessage[] }) {
+async function callGemini(body: Required<Pick<ChatBody, "model" | "baseUrl" | "apiKey">> & { messages: ChatMessage[] }, allowLocal: boolean) {
   const endpoint = apiUrl(body.baseUrl, `/v1beta/models/${encodeURIComponent(body.model)}:generateContent`);
-  if (!validateEndpoint(endpoint)) throw new Error("接口地址必须使用 HTTPS");
+  if (!validateEndpoint(endpoint, allowLocal)) throw new Error(endpointError);
   endpoint.searchParams.set("key", body.apiKey);
   const response = await fetch(endpoint, {
     method: "POST",
@@ -120,16 +122,18 @@ export async function POST(request: NextRequest) {
     const model = body.model?.trim();
     const baseUrl = body.baseUrl?.trim();
     const messages = body.messages?.filter((message) => (message.role === "user" || message.role === "assistant") && message.content?.trim()).slice(-20);
+    const requestHost = new URL(request.url).hostname;
+    const allowLocal = requestHost === "localhost" || requestHost === "127.0.0.1" || requestHost === "[::1]";
 
     if (!model || !baseUrl || !messages?.length || (!body.apiKey && provider !== "compatible")) {
       return NextResponse.json({ error: "模型配置不完整，请检查接口类型、模型名、服务地址和 API Key" }, { status: 400 });
     }
 
     const reply = provider === "anthropic"
-      ? await callAnthropic({ model, baseUrl, apiKey: body.apiKey ?? "", messages })
+      ? await callAnthropic({ model, baseUrl, apiKey: body.apiKey ?? "", messages }, allowLocal)
       : provider === "gemini"
-        ? await callGemini({ model, baseUrl, apiKey: body.apiKey ?? "", messages })
-        : await callOpenAI({ provider, model, baseUrl, apiKey: body.apiKey, messages });
+        ? await callGemini({ model, baseUrl, apiKey: body.apiKey ?? "", messages }, allowLocal)
+        : await callOpenAI({ provider, model, baseUrl, apiKey: body.apiKey, messages }, allowLocal);
 
     if (!reply) return NextResponse.json({ error: "模型没有返回可显示的文字" }, { status: 502 });
     return NextResponse.json({ reply });

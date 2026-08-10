@@ -18,9 +18,11 @@ npm run dev
 - OpenAI 原生接口
 - Anthropic Claude 原生接口
 - Google Gemini 原生接口
-- OpenAI 兼容接口，包括 Ollama、LM Studio、OpenRouter、硅基流动及其他兼容服务
+- OpenAI 兼容接口，包括 OpenRouter、硅基流动及其他兼容服务
 
-模型配置和 API Key 只保存在当前浏览器标签页，不写入项目文件。使用外部模型时，对话内容会发送给你选择的服务商，请按自己的隐私要求选择模型和服务。
+保存模型设置时，MORI 会先发送一次真实 API 验证请求；验证成功后才显示“模型可用”。模型配置和 API Key 只保存在当前浏览器标签页，不写入项目文件。使用外部模型时，对话内容会发送给你选择的服务商，请按自己的隐私要求选择模型和服务。
+
+线上 Pages 版本只能连接可从互联网访问的 HTTPS 模型接口，不能连接你电脑上的 `localhost`（例如本机 Ollama、LM Studio）。如需本机模型，请在本机运行 MORI。
 
 ## 个人功能
 

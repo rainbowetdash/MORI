@@ -13,6 +13,21 @@ async function render(path = "/") {
   );
 }
 
+async function callChat(body) {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  return worker.fetch(
+    new Request("https://mori-companion.pages.dev/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+}
+
 test("server-renders the MORI experience", async () => {
   const response = await render();
   assert.equal(response.status, 200);
@@ -58,4 +73,20 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(route, /callAnthropic/);
   assert.match(route, /callGemini/);
   assert.match(route, /OpenAI|compatible/);
+  assert.match(page, /验证并连接/);
+  assert.match(page, /模型尚未验证，本条没有发送到模型服务/);
+  assert.match(page, /未自动改用演示回复/);
+  assert.match(route, /线上 MORI 无法访问你电脑上的 localhost/);
+});
+
+test("rejects a local model address from the deployed Pages runtime", async () => {
+  const response = await callChat({
+    provider: "compatible",
+    baseUrl: "http://localhost:11434/v1",
+    model: "llama3",
+    messages: [{ role: "user", content: "connectivity check" }],
+  });
+  assert.equal(response.status, 500);
+  const payload = await response.json();
+  assert.match(payload.error, /线上 MORI 无法访问你电脑上的 localhost/);
 });
