@@ -122,8 +122,10 @@ export async function POST(request: NextRequest) {
     const model = body.model?.trim();
     const baseUrl = body.baseUrl?.trim();
     const messages = body.messages?.filter((message) => (message.role === "user" || message.role === "assistant") && message.content?.trim()).slice(-20);
-    const requestHost = new URL(request.url).hostname;
-    const allowLocal = requestHost === "localhost" || requestHost === "127.0.0.1" || requestHost === "[::1]";
+    // Pages may rewrite request.url to an internal localhost address. The Host
+    // header retains the public site name, so it is the source of truth here.
+    const requestHost = request.headers.get("host") ?? new URL(request.url).hostname;
+    const allowLocal = requestHost === "localhost" || requestHost === "127.0.0.1" || requestHost === "[::1]" || requestHost === "::1";
 
     if (!model || !baseUrl || !messages?.length || (!body.apiKey && provider !== "compatible")) {
       return NextResponse.json({ error: "模型配置不完整，请检查接口类型、模型名、服务地址和 API Key" }, { status: 400 });
