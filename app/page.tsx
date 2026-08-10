@@ -333,15 +333,6 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  function selectAction(next: PetAction) {
-    setAction(next);
-    setSpeechIndex((current) => (current + 1) % ACTION_LINES[next].length);
-    if (next === "walk" || next === "stretch") {
-      setLeafCount((count) => count + 1);
-      setToast("陪 MORI 动了一会儿 · 获得一片叶子");
-    }
-  }
-
   function cycleMood() {
     if (suppressMoodChangeRef.current) {
       suppressMoodChangeRef.current = false;
@@ -737,7 +728,7 @@ export default function Home() {
             </span>
             <span className="pet-arm arm-left" /><span className="pet-arm arm-right" />
             <span className="pet-foot foot-left" /><span className="pet-foot foot-right" />
-            {action === "read" && <span className="pet-book"><i>little<br />things</i></span>}
+            {action === "read" && <><span className="pet-book" /><span className="reading-pages" aria-hidden="true"><i /><i /><i /></span></>}
             {action === "sleep" && <span className="sleep-symbols">z<br /><b>z</b></span>}
           </div>
           <div className="pet-name"><strong>MORI</strong><span>{isDragging ? "被抱起来啦 · 松手会回到原状态" : `${activeLabel}中 · 点我换表情`}</span></div>
@@ -767,15 +758,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="action-dock" aria-label="选择 MORI 的状态">
-          <span className="dock-label">状态</span>
-          {STATES.map((item) => (
-            <button key={item.id} className={action === item.id ? "active" : ""} onClick={() => selectAction(item.id)}>
-              <span>{item.symbol}</span>{item.label}
-            </button>
-          ))}
-          <div className="leaf-counter"><span>◆</span>{leafCount} 片叶子</div>
-        </div>
+        <div className="leaf-counter" aria-label={`已收集 ${leafCount} 片叶子`}><span>◆</span>{leafCount} 片叶子</div>
       </section>
 
       <aside className={`chat-panel ${chatOpen ? "open" : ""}`} aria-hidden={!chatOpen}>

@@ -88,6 +88,8 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /和 MORI 聊聊/);
   assert.match(page, /查看全部聊天/);
   assert.match(page, /bubble-chat-messages/);
+  assert.match(page, /reading-pages/);
+  assert.doesNotMatch(page, /action-dock/);
   assert.match(page, /GROW A LITTLE TODAY/);
   assert.match(page, /mori-garden-moments/);
   assert.match(page, /MORI 的彩色手账/);
