@@ -57,6 +57,8 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /isDragging/);
   assert.match(page, /stageRef/);
   assert.match(page, /dockClearance/);
+  assert.match(page, /crossedDragThreshold/);
+  assert.match(page, /if \(!dragRef\.current\.moved\)/);
   assert.match(page, /点我换表情/);
   assert.match(page, /buildLetter/);
   assert.match(page, /mori-letter-drafts/);

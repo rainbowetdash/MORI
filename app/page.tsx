@@ -270,14 +270,18 @@ export default function Home() {
       originY: petPosition.y,
       moved: false,
     };
-    setIsDragging(true);
   }
 
   function dragPet(event: ReactPointerEvent<HTMLDivElement>) {
     if (!dragRef.current) return;
     const nextX = dragRef.current.originX + event.clientX - dragRef.current.startX;
     const nextY = dragRef.current.originY + event.clientY - dragRef.current.startY;
-    if (Math.abs(event.clientX - dragRef.current.startX) > 4 || Math.abs(event.clientY - dragRef.current.startY) > 4) dragRef.current.moved = true;
+    if (!dragRef.current.moved) {
+      const crossedDragThreshold = Math.abs(event.clientX - dragRef.current.startX) > 4 || Math.abs(event.clientY - dragRef.current.startY) > 4;
+      if (!crossedDragThreshold) return;
+      dragRef.current.moved = true;
+      setIsDragging(true);
+    }
 
     const stage = stageRef.current;
     const pet = event.currentTarget;
