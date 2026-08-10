@@ -74,6 +74,9 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /MORI 的树洞/);
   assert.match(page, /ACTION_LINES/);
   assert.match(page, /actionRef\.current === "sleep" \? "read"/);
+  assert.match(page, /45000 \+ Math\.random\(\) \* 45000/);
+  assert.match(page, /walkDirectionRef/);
+  assert.match(page, /is-walking/);
   assert.match(page, /GROW A LITTLE TODAY/);
   assert.match(page, /mori-garden-moments/);
   assert.match(page, /MORI 的彩色手账/);

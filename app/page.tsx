@@ -230,6 +230,7 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const actionRef = useRef<PetAction>("idle");
+  const walkDirectionRef = useRef<1 | -1>(1);
   const journalPageRef = useRef<HTMLElement>(null);
   const journalStickerDragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null);
 
@@ -263,24 +264,33 @@ export default function Home() {
       const next = actionRef.current === "sleep" ? "read" : choices[Math.floor(Math.random() * choices.length)];
       setAction(next);
       setSpeechIndex(Math.floor(Math.random() * ACTION_LINES[next].length));
-      timer = window.setTimeout(nextMoment, 7000 + Math.random() * 7000);
+      timer = window.setTimeout(nextMoment, 45000 + Math.random() * 45000);
     };
-    timer = window.setTimeout(nextMoment, 9000);
+    timer = window.setTimeout(nextMoment, 50000);
     return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
     if (action !== "walk" || isDragging) return;
-    const walker = window.setInterval(() => {
+    const moveAlongPath = () => {
       const stageWidth = stageRef.current?.clientWidth ?? 900;
-      const horizontal = Math.max(110, Math.min(390, stageWidth / 2 - 120));
+      const horizontal = Math.max(150, Math.min(390, stageWidth / 2 - 120));
       setPetPosition((current) => ({
-        x: Math.max(-horizontal, Math.min(horizontal, current.x + (Math.random() - .5) * 95)),
-        y: Math.max(-105, Math.min(25, current.y + (Math.random() - .5) * 42)),
+        x: (() => {
+          const candidate = current.x + walkDirectionRef.current * 135;
+          if (candidate >= horizontal || candidate <= -horizontal) walkDirectionRef.current *= -1;
+          return Math.max(-horizontal, Math.min(horizontal, candidate));
+        })(),
+        y: Math.max(-72, Math.min(12, current.y + (Math.random() - .5) * 18)),
       }));
       setSpeechIndex(Math.floor(Math.random() * ACTION_LINES.walk.length));
-    }, 3200);
-    return () => window.clearInterval(walker);
+    };
+    const start = window.setTimeout(moveAlongPath, 80);
+    const walker = window.setInterval(moveAlongPath, 5000);
+    return () => {
+      window.clearTimeout(start);
+      window.clearInterval(walker);
+    };
   }, [action, isDragging]);
 
   useEffect(() => {
@@ -684,7 +694,7 @@ export default function Home() {
         <button className="journal-object" onClick={() => setJournalOpen(true)} aria-label="打开 MORI 手账"><span>MY<br />LITTLE<br />JOURNAL</span><i>✿</i></button>
 
         <div
-          className={`pet-wrap action-${action} mood-${activeMood.id} ${isDragging ? "is-dragging" : ""}`}
+          className={`pet-wrap action-${action} mood-${activeMood.id} ${action === "walk" ? "is-walking" : ""} ${isDragging ? "is-dragging" : ""}`}
           style={{ transform: `translate(${petPosition.x}px, ${petPosition.y}px)` }}
           onPointerDown={startDragging}
           onPointerMove={dragPet}
