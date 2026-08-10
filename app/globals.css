@@ -207,7 +207,9 @@ button { color: inherit; }
 @keyframes mote { 0%,100% { transform: translate(0,12px) scale(.5); opacity: 0; } 30% { opacity: .85; } 70% { opacity: .45; } 90% { transform: translate(18px,-40px) scale(1); opacity: 0; } }
 @keyframes bubble-arrive { from { transform: translate(8px,8px) scale(.97); opacity: 0; } }
 
-.thought-bubble { position: absolute; z-index: 7; left: calc(50% + 125px); bottom: 335px; width: 280px; padding: 18px 20px; border-radius: 22px 22px 22px 7px; background: rgba(255,253,248,.9); border: 1px solid rgba(69,92,78,.11); box-shadow: var(--soft-shadow); backdrop-filter: blur(14px) saturate(1.08); animation: bubble-arrive .6s cubic-bezier(.2,.85,.25,1) both; }
+.thought-bubble-anchor { position: absolute; z-index: 7; left: calc(50% + 125px); bottom: 335px; transition: transform .28s cubic-bezier(.2,.82,.25,1); }
+.thought-bubble-anchor.is-walking { transition: transform 3.8s linear; }.thought-bubble-anchor.is-dragging { transition: none; }
+.thought-bubble { width: 280px; padding: 18px 20px; border-radius: 22px 22px 22px 7px; background: rgba(255,253,248,.9); border: 1px solid rgba(69,92,78,.11); box-shadow: var(--soft-shadow); backdrop-filter: blur(14px) saturate(1.08); animation: bubble-arrive .6s cubic-bezier(.2,.85,.25,1) both; }
 .thought-bubble::after { content: ""; position: absolute; left: -13px; bottom: 2px; border: 15px solid transparent; border-right-color: rgba(255,253,248,.95); transform: rotate(32deg); }
 .thought-bubble p { margin: 0 0 13px; font: 17px/1.55 Georgia, "Noto Serif SC", serif; }
 .thought-bubble button { border: 0; padding: 0; background: transparent; color: var(--moss-dark); font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -359,14 +361,14 @@ button { color: inherit; }
 @media (max-width: 1050px) {
   .topbar { grid-template-columns: 1fr auto; }.status-pill { display: none; }.top-actions button:nth-child(2), .top-actions button:nth-child(3) { display: none; }
   .chat-is-open .desktop-stage { margin-right: 0; }.chat-panel { width: min(430px, 100vw); }
-  .thought-bubble { left: auto; right: 10%; }.shelf { display: none; }.wall-note.note-two { display: none; }
+  .thought-bubble-anchor { left: auto; right: 10%; }.shelf { display: none; }.wall-note.note-two { display: none; }
 }
 
 @media (max-width: 700px) {
   body { overflow: auto; }.topbar { height: 64px; padding: 0 14px; }.brand small { display: none; }.top-actions button:not(:last-child) { display: none; }
   .desktop-stage { height: calc(100dvh - 64px); min-height: 650px; }.chat-panel { top: 64px; }
   .sky-window { left: 22px; top: 50px; transform: scale(.75); transform-origin: top left; }.wall-note { display: none; }.treehole-object { left: 24px; transform: scale(.7); transform-origin: bottom left; }.garden-object { right: 118px; transform: scale(.68) rotate(-4deg); transform-origin: bottom right; }.journal-object { right: 22px; transform: scale(.72) rotate(3deg); transform-origin: bottom right; }
-  .pet-wrap { bottom: 150px; }.thought-bubble { right: 14px; bottom: 410px; width: 230px; }.action-dock { width: calc(100% - 18px); overflow-x: auto; justify-content: flex-start; }.action-dock button { min-width: 54px; }.leaf-counter { display: none; }.chat-launcher { right: 14px; bottom: 96px; }
+  .pet-wrap { bottom: 150px; }.thought-bubble-anchor { right: 14px; bottom: 410px; }.thought-bubble { width: 230px; }.action-dock { width: calc(100% - 18px); overflow-x: auto; justify-content: flex-start; }.action-dock button { min-width: 54px; }.leaf-counter { display: none; }.chat-launcher { right: 14px; bottom: 96px; }
   .field-grid, .support-actions, .serious-guidance { grid-template-columns: 1fr; }.serious-card h1 { font-size: 34px; }.serious-buttons { flex-direction: column; }.sticker-picker { grid-template-columns: repeat(5, 1fr); }.journal-entry-list { grid-template-columns: 1fr; }
   .crisis-resource-link { grid-template-columns: 1fr; }.crisis-resource-link b { grid-column: 1; grid-row: auto; }.crisis-resource-modal { padding: 20px; }
 }

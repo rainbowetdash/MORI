@@ -198,7 +198,7 @@ function buildLetter(recipient: LetterRecipient, source: string) {
 }
 
 export default function Home() {
-  const [action, setAction] = useState<PetAction>("idle");
+  const [action, setAction] = useState<PetAction>("walk");
   const [speechIndex, setSpeechIndex] = useState(0);
   const [moodIndex, setMoodIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -229,7 +229,7 @@ export default function Home() {
   const suppressMoodChangeRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
-  const actionRef = useRef<PetAction>("idle");
+  const actionRef = useRef<PetAction>("walk");
   const walkDirectionRef = useRef<1 | -1>(1);
   const journalPageRef = useRef<HTMLElement>(null);
   const journalStickerDragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -725,9 +725,14 @@ export default function Home() {
           <div className="pet-name"><strong>MORI</strong><span>{isDragging ? "被抱起来啦 · 松手会回到原状态" : `${activeLabel}中 · 点我换表情`}</span></div>
         </div>
 
-        <div className="thought-bubble">
-          <p>{ACTION_LINES[action][speechIndex % ACTION_LINES[action].length]}</p>
-          <button onClick={() => setChatOpen(true)}>把今天发生的事丢给我</button>
+        <div
+          className={`thought-bubble-anchor ${action === "walk" ? "is-walking" : ""} ${isDragging ? "is-dragging" : ""}`}
+          style={{ transform: `translate(${petPosition.x}px, ${petPosition.y}px)` }}
+        >
+          <div className="thought-bubble">
+            <p>{ACTION_LINES[action][speechIndex % ACTION_LINES[action].length]}</p>
+            <button onClick={() => setChatOpen(true)}>把今天发生的事丢给我</button>
+          </div>
         </div>
 
         <div className="action-dock" aria-label="选择 MORI 的状态">

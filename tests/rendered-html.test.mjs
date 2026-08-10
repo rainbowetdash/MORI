@@ -80,6 +80,8 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /45000 \+ Math\.random\(\) \* 45000/);
   assert.match(page, /walkDirectionRef/);
   assert.match(page, /is-walking/);
+  assert.match(page, /const \[action, setAction\] = useState<PetAction>\("walk"\)/);
+  assert.match(page, /thought-bubble-anchor/);
   assert.match(page, /GROW A LITTLE TODAY/);
   assert.match(page, /mori-garden-moments/);
   assert.match(page, /MORI 的彩色手账/);
