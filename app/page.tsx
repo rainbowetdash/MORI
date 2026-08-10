@@ -202,6 +202,7 @@ export default function Home() {
   const [speechIndex, setSpeechIndex] = useState(0);
   const [moodIndex, setMoodIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isBubbleChatOpen, setIsBubbleChatOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
@@ -228,6 +229,7 @@ export default function Home() {
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const suppressMoodChangeRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const bubbleChatEndRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const actionRef = useRef<PetAction>("walk");
   const walkDirectionRef = useRef<1 | -1>(1);
@@ -319,6 +321,7 @@ export default function Home() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    bubbleChatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages, isThinking]);
 
   useEffect(() => {
@@ -729,9 +732,23 @@ export default function Home() {
           className={`thought-bubble-anchor ${action === "walk" ? "is-walking" : ""} ${isDragging ? "is-dragging" : ""}`}
           style={{ transform: `translate(${petPosition.x}px, ${petPosition.y}px)` }}
         >
-          <div className="thought-bubble">
-            <p>{ACTION_LINES[action][speechIndex % ACTION_LINES[action].length]}</p>
-            <button onClick={() => setChatOpen(true)}>把今天发生的事丢给我</button>
+          <div className={`thought-bubble ${isBubbleChatOpen ? "chatting" : ""}`}>
+            {isBubbleChatOpen ? <>
+              <div className="bubble-chat-heading"><span>和 MORI 聊聊</span><button type="button" onClick={() => setIsBubbleChatOpen(false)} aria-label="收起聊天框">×</button></div>
+              <div className="bubble-chat-messages" aria-live="polite">
+                {messages.slice(-3).map((message) => <p key={message.id} className={`bubble-message ${message.role}`}>{message.text}</p>)}
+                {isThinking && <p className="bubble-message assistant thinking-message">MORI 正在整理…</p>}
+                <div ref={bubbleChatEndRef} />
+              </div>
+              <form className="bubble-composer" onSubmit={sendMessage}>
+                <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="把发生的事告诉 MORI…" aria-label="给 MORI 的消息" disabled={isThinking} />
+                <button type="submit" disabled={!input.trim() || isThinking}>发送</button>
+              </form>
+              <button type="button" className="view-all-chats" onClick={() => setChatOpen(true)}>查看全部聊天</button>
+            </> : <>
+              <p>{ACTION_LINES[action][speechIndex % ACTION_LINES[action].length]}</p>
+              <button type="button" className="bubble-chat-button" onClick={() => setIsBubbleChatOpen(true)}>和 MORI 聊聊</button>
+            </>}
           </div>
         </div>
 
@@ -744,8 +761,6 @@ export default function Home() {
           ))}
           <div className="leaf-counter"><span>◆</span>{leafCount} 片叶子</div>
         </div>
-
-        {!chatOpen && <button className="chat-launcher" onClick={() => setChatOpen(true)}><span>◌</span>和 MORI 聊聊</button>}
       </section>
 
       <aside className={`chat-panel ${chatOpen ? "open" : ""}`} aria-hidden={!chatOpen}>
