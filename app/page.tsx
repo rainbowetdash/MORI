@@ -668,9 +668,6 @@ export default function Home() {
         </button>
         <div className="status-pill"><span className="status-dot" />只属于你的安静角落</div>
         <nav className="top-actions" aria-label="MORI 工具">
-          <button onClick={() => setMailOpen(true)}>树洞 <span>{letterDrafts.length}</span></button>
-          <button onClick={() => setJournalOpen(true)}>MORI 手账</button>
-          <button onClick={() => setGardenOpen(true)}>心理花园</button>
           <button className={connected ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
             {connected ? "模型可用" : "连接模型"}
           </button>
@@ -690,7 +687,8 @@ export default function Home() {
         </div>
         <div className="floor-rug" aria-hidden="true" />
         <div className="ambient-light" aria-hidden="true"><i /><i /><i /><i /></div>
-        <div className="mailbox-object" aria-hidden="true"><span>✉</span><i /></div>
+        <button className="treehole-object" onClick={() => setMailOpen(true)} aria-label="打开 MORI 树洞"><span className="treehole-opening">···</span><b>树洞</b><small>留下一句话</small><i /></button>
+        <button className="garden-object" onClick={() => setGardenOpen(true)} aria-label="打开 MORI 心理花园"><span>✿</span><b>心理<br />花园</b><i>☘</i></button>
         <button className="journal-object" onClick={() => setJournalOpen(true)} aria-label="打开 MORI 手账"><span>MY<br />LITTLE<br />JOURNAL</span><i>✿</i></button>
 
         <div
