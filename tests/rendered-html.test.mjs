@@ -103,9 +103,10 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(route, /OpenAI|compatible/);
   assert.match(page, /model: "deepseek-v4-flash"/);
   assert.match(page, /baseUrl: "https:\/\/api\.deepseek\.com"/);
-  assert.match(route, /DEFAULT_TEST_MODEL/);
-  assert.match(route, /x-mori-default-deepseek-key/);
-  assert.match(route, /isDefaultTestModel/);
+  assert.match(route, /const apiKey = body\.apiKey\?\.trim\(\) \|\| ""/);
+  const pagesWorker = await readFile(new URL("../scripts/pages-worker-entry.mjs", import.meta.url), "utf8");
+  assert.match(pagesWorker, /MORI_DEEPSEEK_API_KEY/);
+  assert.match(pagesWorker, /isDefaultTestRequest/);
   assert.match(page, /验证并连接/);
   assert.match(page, /模型尚未验证，本条没有发送到模型服务/);
   assert.match(page, /未自动改用演示回复/);

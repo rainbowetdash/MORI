@@ -19,11 +19,24 @@ export default {
       return env.ASSETS.fetch(request);
     }
 
-    // The browser never receives this secret. Only the default test model gets
-    // the key, and the API route verifies its exact model and endpoint first.
-    const headers = new Headers(request.headers);
-    headers.delete("x-mori-default-deepseek-key");
-    if (env.MORI_DEEPSEEK_API_KEY) headers.set("x-mori-default-deepseek-key", env.MORI_DEEPSEEK_API_KEY);
-    return app.fetch(new Request(request, { headers }), env, ctx);
+    // The browser never receives this secret. Only the exact default testing
+    // request is completed inside the worker before the app handles it.
+    if (pathname === "/api/chat" && request.method === "POST" && env.MORI_DEEPSEEK_API_KEY) {
+      try {
+        const body = await request.clone().json();
+        const isDefaultTestRequest = body.provider === "compatible"
+          && body.model === "deepseek-v4-flash"
+          && String(body.baseUrl || "").replace(/\/+$/, "") === "https://api.deepseek.com";
+        if (isDefaultTestRequest && !body.apiKey) {
+          const headers = new Headers(request.headers);
+          headers.set("content-type", "application/json");
+          return app.fetch(new Request(request, { headers, body: JSON.stringify({ ...body, apiKey: env.MORI_DEEPSEEK_API_KEY }) }), env, ctx);
+        }
+      } catch {
+        // The app route returns its normal configuration error for malformed input.
+      }
+    }
+
+    return app.fetch(request, env, ctx);
   },
 };

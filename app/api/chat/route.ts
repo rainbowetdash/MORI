@@ -10,9 +10,6 @@ type ChatBody = {
   messages?: ChatMessage[];
 };
 
-const DEFAULT_TEST_MODEL = "deepseek-v4-flash";
-const DEFAULT_TEST_ENDPOINT = "https://api.deepseek.com";
-
 const MORI_SYSTEM_PROMPT = `你是 MORI，一个仅供个人使用的 AI 心理资源导航与表达整理工具。
 
 身份边界：
@@ -129,8 +126,7 @@ export async function POST(request: NextRequest) {
     // header retains the public site name, so it is the source of truth here.
     const requestHost = request.headers.get("host") ?? new URL(request.url).hostname;
     const allowLocal = requestHost === "localhost" || requestHost === "127.0.0.1" || requestHost === "[::1]" || requestHost === "::1";
-    const isDefaultTestModel = provider === "compatible" && model === DEFAULT_TEST_MODEL && baseUrl?.replace(/\/+$/, "") === DEFAULT_TEST_ENDPOINT;
-    const apiKey = body.apiKey?.trim() || (isDefaultTestModel ? request.headers.get("x-mori-default-deepseek-key")?.trim() : "");
+    const apiKey = body.apiKey?.trim() || "";
 
     if (!model || !baseUrl || !messages?.length || (!apiKey && provider !== "compatible")) {
       return NextResponse.json({ error: "模型配置不完整，请检查接口类型、模型名、服务地址和 API Key" }, { status: 400 });
