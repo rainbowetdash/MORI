@@ -24,7 +24,8 @@ type LetterDraft = {
 type GardenKind = "sunflower" | "iris" | "berry" | "lake" | "mist" | "hill" | "light";
 type GardenMoment = { id: string; kind: GardenKind; createdAt: number };
 type JournalPaper = "peach" | "sky" | "lilac" | "sunshine";
-type JournalEntry = { id: string; title: string; body: string; stickers: string[]; photos: string[]; paper: JournalPaper; createdAt: number; updatedAt: number };
+type JournalSticker = { id: string; symbol: string; x: number; y: number; rotation: number };
+type JournalEntry = { id: string; title: string; body: string; stickers: JournalSticker[]; photos: string[]; paper: JournalPaper; createdAt: number; updatedAt: number };
 
 const LETTER_RECIPIENTS: LetterRecipient[] = ["家人", "朋友", "伴侣", "专业人士"];
 const JOURNAL_STICKERS = [
@@ -118,9 +119,28 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   },
 ];
 
+function newJournalSticker(symbol: string, index = 0): JournalSticker {
+  const offset = index * 7;
+  return { id: `sticker-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`, symbol, x: 74 - (offset % 21), y: 73 - (offset % 16), rotation: (index % 2 ? 7 : -7) };
+}
+
+function normalizeJournalEntry(entry: Partial<JournalEntry> & { stickers?: Array<JournalSticker | string> }): JournalEntry {
+  const now = Date.now();
+  return {
+    id: entry.id || `journal-${now}`,
+    title: entry.title || "",
+    body: entry.body || "",
+    stickers: (entry.stickers || []).map((sticker, index) => typeof sticker === "string" ? newJournalSticker(sticker, index) : { ...sticker, x: Math.max(4, Math.min(88, sticker.x)), y: Math.max(6, Math.min(84, sticker.y)) }),
+    photos: Array.isArray(entry.photos) ? entry.photos : [],
+    paper: entry.paper || "peach",
+    createdAt: entry.createdAt || now,
+    updatedAt: entry.updatedAt || now,
+  };
+}
+
 function newJournalEntry(): JournalEntry {
   const now = Date.now();
-  return { id: `journal-${now}`, title: "", body: "", stickers: ["✿"], photos: [], paper: "peach", createdAt: now, updatedAt: now };
+  return { id: `journal-${now}`, title: "", body: "", stickers: [newJournalSticker("✿")], photos: [], paper: "peach", createdAt: now, updatedAt: now };
 }
 
 function localDemoReply(input: string): ChatMessage {
@@ -182,6 +202,7 @@ export default function Home() {
   const [journalOpen, setJournalOpen] = useState(false);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [journalDraft, setJournalDraft] = useState<JournalEntry>(() => newJournalEntry());
+  const [selectedJournalStickerId, setSelectedJournalStickerId] = useState<string | null>(null);
   const [gardenOpen, setGardenOpen] = useState(false);
   const [gardenMoments, setGardenMoments] = useState<GardenMoment[]>([]);
   const [seriousMode, setSeriousMode] = useState(false);
@@ -200,6 +221,8 @@ export default function Home() {
   const suppressMoodChangeRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const journalPageRef = useRef<HTMLElement>(null);
+  const journalStickerDragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("mori-agent-config");
@@ -225,7 +248,10 @@ export default function Home() {
   useEffect(() => {
     try {
       const savedJournal = localStorage.getItem("mori-journal-entries");
-      if (savedJournal) setJournalEntries(JSON.parse(savedJournal) as JournalEntry[]);
+      if (savedJournal) {
+        const parsed = JSON.parse(savedJournal) as Array<Partial<JournalEntry> & { stickers?: Array<JournalSticker | string> }>;
+        if (Array.isArray(parsed)) setJournalEntries(parsed.map(normalizeJournalEntry));
+      }
       const savedGarden = localStorage.getItem("mori-garden-moments");
       if (savedGarden) setGardenMoments(JSON.parse(savedGarden) as GardenMoment[]);
     } catch {
@@ -506,15 +532,42 @@ export default function Home() {
     setToast(files.length < selected.length ? "已加入可用图片；每页最多 4 张、单张不超过 2MB" : "图片已经贴到这一页了");
   }
 
-  function toggleJournalSticker(symbol: string) {
-    setJournalDraft((current) => ({
-      ...current,
-      stickers: current.stickers.includes(symbol) ? current.stickers.filter((item) => item !== symbol) : [...current.stickers, symbol],
-    }));
+  function addJournalSticker(symbol: string) {
+    const sticker = newJournalSticker(symbol, journalDraft.stickers.length);
+    setJournalDraft((current) => ({ ...current, stickers: [...current.stickers, sticker] }));
+    setSelectedJournalStickerId(sticker.id);
   }
 
   function openJournalEntry(entry: JournalEntry) {
-    setJournalDraft({ ...entry, photos: [...entry.photos], stickers: [...entry.stickers] });
+    setJournalDraft({ ...entry, photos: [...entry.photos], stickers: entry.stickers.map((sticker) => ({ ...sticker })) });
+    setSelectedJournalStickerId(null);
+  }
+
+  function startJournalStickerDrag(event: ReactPointerEvent<HTMLDivElement>, sticker: JournalSticker) {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    journalStickerDragRef.current = { id: sticker.id, startX: event.clientX, startY: event.clientY, originX: sticker.x, originY: sticker.y };
+    setSelectedJournalStickerId(sticker.id);
+  }
+
+  function moveJournalSticker(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = journalStickerDragRef.current;
+    const page = journalPageRef.current;
+    if (!drag || !page) return;
+    const bounds = page.getBoundingClientRect();
+    const x = Math.max(4, Math.min(88, drag.originX + ((event.clientX - drag.startX) / bounds.width) * 100));
+    const y = Math.max(6, Math.min(84, drag.originY + ((event.clientY - drag.startY) / bounds.height) * 100));
+    setJournalDraft((current) => ({ ...current, stickers: current.stickers.map((sticker) => sticker.id === drag.id ? { ...sticker, x, y } : sticker) }));
+  }
+
+  function stopJournalStickerDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    journalStickerDragRef.current = null;
+  }
+
+  function removeJournalSticker(id: string) {
+    setJournalDraft((current) => ({ ...current, stickers: current.stickers.filter((sticker) => sticker.id !== id) }));
+    setSelectedJournalStickerId(null);
   }
 
   function deleteJournalEntry(id: string) {
@@ -589,7 +642,7 @@ export default function Home() {
         <div className="floor-rug" aria-hidden="true" />
         <div className="ambient-light" aria-hidden="true"><i /><i /><i /><i /></div>
         <div className="mailbox-object" aria-hidden="true"><span>✉</span><i /></div>
-        <div className="journal-object" aria-hidden="true"><span>MY<br />LITTLE<br />JOURNAL</span><i>✿</i></div>
+        <button className="journal-object" onClick={() => setJournalOpen(true)} aria-label="打开 MORI 手账"><span>MY<br />LITTLE<br />JOURNAL</span><i>✿</i></button>
 
         <div
           className={`pet-wrap action-${action} mood-${activeMood.id} ${isDragging ? "is-dragging" : ""}`}
@@ -725,11 +778,11 @@ export default function Home() {
       {journalOpen && (
         <Drawer title="MORI 的彩色手账" subtitle="把想留下的文字、照片和小贴纸贴在这一页" onClose={() => setJournalOpen(false)} wide>
           <div className="journal-toolbar">
-            <button type="button" onClick={() => setJournalDraft(newJournalEntry())}>＋ 新的一页</button>
+            <button type="button" onClick={() => { setJournalDraft(newJournalEntry()); setSelectedJournalStickerId(null); }}>＋ 新的一页</button>
             <span>{new Date(journalDraft.createdAt).toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })}</span>
             <button type="button" className="journal-save" onClick={saveJournalEntry}>保存这一页</button>
           </div>
-          <section className={`journal-page paper-${journalDraft.paper}`} aria-label="正在编辑的手账页">
+          <section ref={journalPageRef} className={`journal-page paper-${journalDraft.paper}`} aria-label="正在编辑的手账页" onPointerDown={() => setSelectedJournalStickerId(null)}>
             <div className="journal-tape tape-one" /><div className="journal-tape tape-two" />
             <div className="journal-page-heading"><input value={journalDraft.title} onChange={(event) => setJournalDraft({ ...journalDraft, title: event.target.value })} placeholder="给今天起一个标题" aria-label="手账标题" /><small>{new Date(journalDraft.createdAt).toLocaleDateString("zh-CN")}</small></div>
             <textarea value={journalDraft.body} onChange={(event) => setJournalDraft({ ...journalDraft, body: event.target.value })} placeholder="今天有什么想贴在这里的片刻？\n不需要写得完整，几个词、一段话都可以。" rows={7} aria-label="手账内容" />
@@ -739,14 +792,14 @@ export default function Home() {
               <img src={photo} alt={`手账照片 ${index + 1}`} />
               <button type="button" onClick={() => setJournalDraft((current) => ({ ...current, photos: current.photos.filter((item) => item !== photo) }))} aria-label={`移除第 ${index + 1} 张图片`}>×</button>
             </figure>)}</div>}
-            {journalDraft.stickers.length > 0 && <div className="journal-stickers" aria-label="已贴上的贴纸">{journalDraft.stickers.map((sticker, index) => <span key={`${sticker}-${index}`}>{sticker}</span>)}</div>}
+            <div className="journal-stickers" aria-label="已贴上的贴纸">{journalDraft.stickers.map((sticker) => <div key={sticker.id} className={`journal-sticker ${selectedJournalStickerId === sticker.id ? "selected" : ""}`} style={{ left: `${sticker.x}%`, top: `${sticker.y}%`, transform: `rotate(${sticker.rotation}deg)` }} role="button" tabIndex={0} aria-label={`贴纸：${sticker.symbol}，可拖动`} onPointerDown={(event) => startJournalStickerDrag(event, sticker)} onPointerMove={moveJournalSticker} onPointerUp={stopJournalStickerDrag} onPointerCancel={stopJournalStickerDrag} onKeyDown={(event) => { if (event.key === "Delete" || event.key === "Backspace") removeJournalSticker(sticker.id); }}><span>{sticker.symbol}</span>{selectedJournalStickerId === sticker.id && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); removeJournalSticker(sticker.id); }} aria-label={`删除贴纸 ${sticker.symbol}`}>×</button>}</div>)}</div>
           </section>
           <section className="journal-supplies" aria-label="手账素材">
             <div className="journal-supplies-heading"><div><span>DECORATE THIS PAGE</span><h3>给这一页加一点颜色</h3></div><label className="image-import">导入图片<input type="file" accept="image/*" multiple onChange={importJournalImages} /></label></div>
             <div className="paper-picker" aria-label="选择纸张颜色">{JOURNAL_PAPERS.map((paper) => <button type="button" key={paper.id} className={journalDraft.paper === paper.id ? "active" : ""} onClick={() => setJournalDraft({ ...journalDraft, paper: paper.id })}><i className={`paper-swatch ${paper.id}`} />{paper.label}</button>)}</div>
-            <div className="sticker-picker" aria-label="选择贴纸">{JOURNAL_STICKERS.map((sticker) => <button type="button" key={sticker.symbol} className={journalDraft.stickers.includes(sticker.symbol) ? "selected" : ""} onClick={() => toggleJournalSticker(sticker.symbol)} aria-pressed={journalDraft.stickers.includes(sticker.symbol)}><b>{sticker.symbol}</b><span>{sticker.label}</span></button>)}</div>
+            <div className="sticker-picker" aria-label="选择贴纸">{JOURNAL_STICKERS.map((sticker) => <button type="button" key={sticker.symbol} onClick={() => addJournalSticker(sticker.symbol)}><b>{sticker.symbol}</b><span>{sticker.label}</span></button>)}</div>
           </section>
-          <section className="journal-history" aria-label="已保存手账"><div><h3>已经留下的页</h3><span>{journalEntries.length} 页</span></div>{journalEntries.length === 0 ? <p>还没有保存的手账。写好这一页后，点击“保存这一页”。</p> : <div className="journal-entry-list">{journalEntries.map((entry) => <article key={entry.id} className={`journal-entry-preview paper-${entry.paper}`}><button type="button" className="journal-entry-open" onClick={() => openJournalEntry(entry)}><small>{new Date(entry.updatedAt).toLocaleDateString("zh-CN")}</small><strong>{entry.title}</strong><p>{entry.body || "一页留白，也是一种记录。"}</p><span>{entry.stickers.slice(0, 4).join(" ")}</span></button><button type="button" className="journal-entry-delete" onClick={() => deleteJournalEntry(entry.id)} aria-label={`删除手账：${entry.title}`}>×</button></article>)}</div>}</section>
+          <section className="journal-history" aria-label="已保存手账"><div><h3>已经留下的页</h3><span>{journalEntries.length} 页</span></div>{journalEntries.length === 0 ? <p>还没有保存的手账。写好这一页后，点击“保存这一页”。</p> : <div className="journal-entry-list">{journalEntries.map((entry) => <article key={entry.id} className={`journal-entry-preview paper-${entry.paper}`}><button type="button" className="journal-entry-open" onClick={() => openJournalEntry(entry)}><small>{new Date(entry.updatedAt).toLocaleDateString("zh-CN")}</small><strong>{entry.title}</strong><p>{entry.body || "一页留白，也是一种记录。"}</p><span>{entry.stickers.slice(0, 4).map((sticker) => sticker.symbol).join(" ")}</span></button><button type="button" className="journal-entry-delete" onClick={() => deleteJournalEntry(entry.id)} aria-label={`删除手账：${entry.title}`}>×</button></article>)}</div>}</section>
           <div className="drawer-disclaimer">文字、贴纸和图片只会在你点击“保存这一页”后保存在这台设备的浏览器中。图片每张不超过 2MB，每页最多 4 张。</div>
         </Drawer>
       )}
