@@ -11,7 +11,7 @@ type ChatMessage = {
   kind?: "letter";
 };
 
-type LetterRecipient = "家人" | "朋友" | "伴侣" | "专业人士";
+type LetterRecipient = "树洞" | "家人" | "朋友" | "伴侣" | "专业人士";
 type LetterDraft = {
   id: string;
   recipient: LetterRecipient;
@@ -27,7 +27,7 @@ type JournalPaper = "peach" | "sky" | "lilac" | "sunshine";
 type JournalSticker = { id: string; symbol: string; x: number; y: number; rotation: number };
 type JournalEntry = { id: string; title: string; body: string; stickers: JournalSticker[]; photos: string[]; paper: JournalPaper; createdAt: number; updatedAt: number };
 
-const LETTER_RECIPIENTS: LetterRecipient[] = ["家人", "朋友", "伴侣", "专业人士"];
+const LETTER_RECIPIENTS: LetterRecipient[] = ["树洞", "家人", "朋友", "伴侣", "专业人士"];
 const JOURNAL_STICKERS = [
   { symbol: "✿", label: "小花" }, { symbol: "☁", label: "云朵" }, { symbol: "☾", label: "月亮" },
   { symbol: "✦", label: "星光" }, { symbol: "♥", label: "心事" }, { symbol: "🍓", label: "草莓" },
@@ -77,6 +77,13 @@ const STATES: Array<{ id: PetAction; label: string; symbol: string }> = [
   { id: "sleep", label: "睡觉", symbol: "☾" },
   { id: "stretch", label: "伸懒腰", symbol: "↟" },
 ];
+const ACTION_LINES: Record<PetAction, string[]> = {
+  idle: ["我在这里发会儿呆。", "今天的光落得很慢。", "不做什么也可以。"],
+  walk: ["陪我走几步吧。", "慢慢走，也是在往前。", "脚步轻一点，心也会松一点。"],
+  read: ["翻一页，世界就安静一点。", "这一段我想读得慢一些。", "字里也藏着小小的休息。"],
+  sleep: ["ZZZZZ…", "zzzzz…", "ZZZZzzzz…"],
+  stretch: ["伸个懒腰，把雾散一点。", "身体先醒过来啦。", "把肩膀放松一点点。"],
+};
 
 const MOODS: Array<{ id: PetMood; label: string }> = [
   { id: "calm", label: "平静" },
@@ -192,6 +199,7 @@ function buildLetter(recipient: LetterRecipient, source: string) {
 
 export default function Home() {
   const [action, setAction] = useState<PetAction>("idle");
+  const [speechIndex, setSpeechIndex] = useState(0);
   const [moodIndex, setMoodIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -221,6 +229,7 @@ export default function Home() {
   const suppressMoodChangeRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const actionRef = useRef<PetAction>("idle");
   const journalPageRef = useRef<HTMLElement>(null);
   const journalStickerDragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null);
 
@@ -244,6 +253,35 @@ export default function Home() {
       }
     }
   }, []);
+
+  useEffect(() => { actionRef.current = action; }, [action]);
+
+  useEffect(() => {
+    let timer: number;
+    const nextMoment = () => {
+      const choices: PetAction[] = ["idle", "walk", "sleep", "read", "stretch"];
+      const next = actionRef.current === "sleep" ? "read" : choices[Math.floor(Math.random() * choices.length)];
+      setAction(next);
+      setSpeechIndex(Math.floor(Math.random() * ACTION_LINES[next].length));
+      timer = window.setTimeout(nextMoment, 7000 + Math.random() * 7000);
+    };
+    timer = window.setTimeout(nextMoment, 9000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (action !== "walk" || isDragging) return;
+    const walker = window.setInterval(() => {
+      const stageWidth = stageRef.current?.clientWidth ?? 900;
+      const horizontal = Math.max(110, Math.min(390, stageWidth / 2 - 120));
+      setPetPosition((current) => ({
+        x: Math.max(-horizontal, Math.min(horizontal, current.x + (Math.random() - .5) * 95)),
+        y: Math.max(-105, Math.min(25, current.y + (Math.random() - .5) * 42)),
+      }));
+      setSpeechIndex(Math.floor(Math.random() * ACTION_LINES.walk.length));
+    }, 3200);
+    return () => window.clearInterval(walker);
+  }, [action, isDragging]);
 
   useEffect(() => {
     try {
@@ -281,6 +319,7 @@ export default function Home() {
 
   function selectAction(next: PetAction) {
     setAction(next);
+    setSpeechIndex((current) => (current + 1) % ACTION_LINES[next].length);
     if (next === "walk" || next === "stretch") {
       setLeafCount((count) => count + 1);
       setToast("陪 MORI 动了一会儿 · 获得一片叶子");
@@ -619,7 +658,7 @@ export default function Home() {
         </button>
         <div className="status-pill"><span className="status-dot" />只属于你的安静角落</div>
         <nav className="top-actions" aria-label="MORI 工具">
-          <button onClick={() => setMailOpen(true)}>信箱 <span>{letterDrafts.length}</span></button>
+          <button onClick={() => setMailOpen(true)}>树洞 <span>{letterDrafts.length}</span></button>
           <button onClick={() => setJournalOpen(true)}>MORI 手账</button>
           <button onClick={() => setGardenOpen(true)}>心理花园</button>
           <button className={connected ? "connected" : ""} onClick={() => { setDraftConfig(config); setSettingsOpen(true); }}>
@@ -679,7 +718,7 @@ export default function Home() {
         </div>
 
         <div className="thought-bubble">
-          <p>{action === "sleep" ? "今天先到这里也可以。" : action === "walk" ? "陪我走五分钟？路不用很远。" : action === "read" ? "有些话，写下来会轻一点。" : action === "stretch" ? "我坐得都要长苔藓了……" : activeMood.id === "happy" ? "看见你回来，我的叶子都亮了。" : activeMood.id === "worried" ? "你今天回来得有点慢，我有一点点担心。" : "你今天回来的时候，好像和平时不太一样。"}</p>
+          <p>{ACTION_LINES[action][speechIndex % ACTION_LINES[action].length]}</p>
           <button onClick={() => setChatOpen(true)}>把今天发生的事丢给我</button>
         </div>
 
@@ -750,11 +789,11 @@ export default function Home() {
       )}
 
       {mailOpen && (
-        <Drawer title="MORI 的信箱" subtitle="AI 帮你表达，发送权永远属于你" onClose={() => setMailOpen(false)}>
-          <div className="mail-intro"><span>{letterDrafts.length}</span><p>封保存在这台设备的草稿<br /><small>没有任何一封会被自动发送</small></p></div>
-          <section className="letter-starter" aria-label="从聊天生成草稿">
-            <span>HELP ME SAY IT</span><h3>把当前对话整理成一封信</h3><p>选择对象后，MORI 会用不同的表达方式起草；你可以继续编辑，也可以不保存。</p>
-            <div className="recipient-picker">{LETTER_RECIPIENTS.map((recipient) => <button key={recipient} onClick={() => openLetterEditor(recipient)}>给{recipient}</button>)}</div>
+        <Drawer title="MORI 的树洞" subtitle="想说但还没准备好告诉任何人的话，可以先放在这里" onClose={() => setMailOpen(false)}>
+          <div className="mail-intro"><span>{letterDrafts.length}</span><p>段只属于你的文字<br /><small>不会被自动发送给任何人</small></p></div>
+          <section className="letter-starter" aria-label="写给树洞">
+            <span>PRIVATE LITTLE NOTE</span><h3>先把想说的话写下来</h3><p>这里不是邮件，也没有收件人。你可以写得凌乱、简短，或者只留下一句。</p>
+            <div className="recipient-picker"><button onClick={() => { setEditingLetter({ id: `letter-${Date.now()}`, recipient: "树洞", title: "今天想说的话", body: "", source: "" }); }}>写一段新的话</button>{LETTER_RECIPIENTS.filter((recipient) => recipient !== "树洞").map((recipient) => <button key={recipient} onClick={() => openLetterEditor(recipient)}>整理给{recipient}</button>)}</div>
           </section>
           {editingLetter && (
             <section className="letter-editor" aria-label="编辑信件草稿">
@@ -768,7 +807,7 @@ export default function Home() {
           <section className="saved-letters" aria-label="已保存草稿">
             <div className="saved-letters-heading"><h3>已保存</h3><span>{letterDrafts.length} 封</span></div>
             {letterDrafts.length === 0 ? <p className="empty-letters">还没有保存的草稿。你可以从当前聊天开始整理。</p> : letterDrafts.map((draft) => (
-              <article className="mail-item" key={draft.id}><div><span>给{draft.recipient}</span><time>{draft.savedAt ? new Date(draft.savedAt).toLocaleDateString("zh-CN") : "未保存"}</time></div><h3>{draft.title}</h3><p>{draft.body.slice(0, 64)}{draft.body.length > 64 ? "……" : ""}</p><div className="mail-item-actions"><button onClick={() => setEditingLetter(draft)}>打开并编辑</button><button onClick={() => copyLetter(draft)}>复制</button><button className="delete-draft" onClick={() => deleteLetterDraft(draft.id)}>删除</button></div></article>
+              <article className="mail-item" key={draft.id}><div><span>{draft.recipient === "树洞" ? "树洞" : `给${draft.recipient}`}</span><time>{draft.savedAt ? new Date(draft.savedAt).toLocaleDateString("zh-CN") : "未保存"}</time></div><h3>{draft.title}</h3><p>{draft.body.slice(0, 64)}{draft.body.length > 64 ? "……" : ""}</p><div className="mail-item-actions"><button onClick={() => setEditingLetter(draft)}>打开并编辑</button><button onClick={() => copyLetter(draft)}>复制</button><button className="delete-draft" onClick={() => deleteLetterDraft(draft.id)}>删除</button></div></article>
             ))}
           </section>
           <div className="drawer-disclaimer">草稿只在你点击“保存草稿”后保存在当前设备的浏览器中；你可以随时复制或删除，MORI 不会代你发送。</div>
@@ -805,7 +844,8 @@ export default function Home() {
       )}
 
       {gardenOpen && (
-        <Drawer title="MORI 的心理花园" subtitle="每一种经历都能成为一部分风景" onClose={() => setGardenOpen(false)}>
+        <Drawer title="MORI 的心理花园" subtitle="每一种经历都能成为一部分风景" onClose={() => setGardenOpen(false)} wide>
+          <section className="garden-journal-heading"><span>GROW A LITTLE TODAY</span><h3>把今天的颜色，留在花园这一页。</h3><p>像手账一样选一片心情、一点勇敢，慢慢让它们长成风景。</p></section>
           <div className="garden-scene" aria-label="你的心理花园">
             <div className="garden-sky"><span className="garden-sun" /><i className="garden-cloud one" /><i className="garden-cloud two" /></div>
             <div className="garden-ground"><i className="flower f1" /><i className="flower f2" /><i className="flower f3" /><i className="light l1" /><i className="light l2" /><i className="light l3" /></div>

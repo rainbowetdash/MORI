@@ -71,6 +71,10 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /startJournalStickerDrag/);
   assert.match(page, /removeJournalSticker/);
   assert.match(page, /打开 MORI 手账/);
+  assert.match(page, /MORI 的树洞/);
+  assert.match(page, /ACTION_LINES/);
+  assert.match(page, /actionRef\.current === "sleep" \? "read"/);
+  assert.match(page, /GROW A LITTLE TODAY/);
   assert.match(page, /mori-garden-moments/);
   assert.match(page, /MORI 的彩色手账/);
   assert.match(page, /不代表健康评估/);
