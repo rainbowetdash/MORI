@@ -331,9 +331,11 @@ export default function Home() {
   }
 
   function closeBubbleChat() {
+    const postChatActions: PetAction[] = ["read", "sleep", "stretch"];
+    const next = postChatActions[Math.floor(Math.random() * postChatActions.length)];
     setIsBubbleChatOpen(false);
-    setAction("walk");
-    setSpeechIndex(0);
+    setAction(next);
+    setSpeechIndex(Math.floor(Math.random() * ACTION_LINES[next].length));
   }
 
   function startDragging(event: ReactPointerEvent<HTMLDivElement>) {
