@@ -97,6 +97,9 @@ test("keeps safety and user control in the product source", async () => {
   assert.match(page, /国家卫生健康委/);
   assert.match(page, /worldhealth|who\.int/i);
   assert.match(route, /MORI_SYSTEM_PROMPT/);
+  assert.match(route, /像一个安静、清醒、没有急着替人下结论的倾听者/);
+  assert.match(route, /不要每一轮都套用/);
+  assert.match(route, /一般回复控制在 2—5 句/);
   assert.match(route, /callOpenAI/);
   assert.match(route, /callAnthropic/);
   assert.match(route, /callGemini/);
